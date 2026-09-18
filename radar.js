@@ -1,1 +1,1 @@
-console.log("radar");
+// Fullscreen radar script
