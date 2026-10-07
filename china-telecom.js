@@ -1,8 +1,11 @@
 /*
- * 中国电信小组件（Egern 版）
+ * 中国电信小组件（Egern 版，单文件双模式）
  * 移植自 Scriptable 版 ChinaTelecom_2024（作者 2Ya&脑瓜）
  *
- * 功能：显示剩余话费 / 剩余（或已用）流量 / 剩余语音
+ * 同一个文件，两种用法（在 Egern 里建两个脚本条目，脚本 URL 填同一个）：
+ *   1. generic 类型 → iOS 小组件：显示剩余话费 / 剩余（或已用）流量 / 剩余语音
+ *   2. request 类型 → 登录捕获：Safari 里登录 e.dlife.cn 成功时自动捕获登录地址，
+ *      存入存储，小组件下次运行自动读取登录，全程无需手动复制粘贴。
  *
  * 环境变量（在模块/小组件的 Env 中配置）：
  *   CT_LOGIN_URL            电信登录地址（抓包得到的登录 URL，用于自动更新 cookie）
@@ -422,20 +425,39 @@ function buildError(title, message) {
   };
 }
 
-/* ---------- 入口 ---------- */
+/* ---------- 登录捕获（request 脚本模式） ---------- */
 
-export default async function (ctx) {
+// 在 Safari/浏览器里登录 e.dlife.cn 成功时，Egern 会经过 loginMiddle 请求，
+// 在此自动捕获登录地址存入存储，小组件下次运行自动读取，全程无需手动操作。
+// 不返回值 = 透传，不影响登录请求本身。
+async function handleCapture(ctx) {
+  const url = (ctx.request && ctx.request.url) || '';
+  if (!url.includes('e.dlife.cn/user/loginMiddle')) return;
+
+  const loginUrl = (url.match(/(http.+)&sign/) || [])[1] || url;
+  if (!loginUrl) return;
+  if (ctx.storage.get('ct_login_url') === loginUrl) return; // 已捕获过
+
+  ctx.storage.set('ct_login_url', loginUrl);
+  // 顺手把旧 cookie 清掉，避免新旧会话混用
+  ctx.storage.delete('ct_cookie');
+  ctx.notify({ title: '中国电信', body: '登录成功，小组件将自动更新' });
+}
+
+/* ---------- 小组件（generic 脚本模式） ---------- */
+
+async function handleWidget(ctx) {
   const title = (ctx.env.CT_TITLE || '中国电信').trim() || '中国电信';
   const { configured, ds, fromCache } = await loadData(ctx);
 
   if (!configured) {
     return buildError(
       title,
-      '请在模块/小组件 Env 中配置 CT_LOGIN_URL（电信登录地址）或 CT_COOKIE'
+      '未登录：在 Safari 登录 e.dlife.cn（需安装 Request 捕获脚本）或配置 CT_LOGIN_URL'
     );
   }
   if (!ds) {
-    return buildError(title, '数据获取失败，请检查网络或重新配置登录地址');
+    return buildError(title, '数据获取失败，请检查网络或重新登录');
   }
 
   const family = ctx.widgetFamily || 'systemSmall';
@@ -446,4 +468,15 @@ export default async function (ctx) {
     return buildLockScreen(title, ds, family);
   }
   return buildSmall(title, ds, fromCache);
+}
+
+/* ---------- 入口：单文件双模式 ---------- */
+
+export default async function (ctx) {
+  // request 脚本条目 → 捕获登录；generic 脚本条目 → 渲染小组件
+  //（ctx.request 仅在 request/response 脚本中可用）
+  if (ctx.request && ctx.request.url) {
+    return handleCapture(ctx);
+  }
+  return handleWidget(ctx);
 }
