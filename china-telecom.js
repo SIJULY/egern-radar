@@ -202,7 +202,11 @@ async function tryCookie(ctx, cookie, settings) {
   const feeRaw = balance?.totalBalanceAvailable;
   if (feeRaw === undefined || feeRaw === null || feeRaw === '') {
     const cached = ctx.storage.getJSON('ct_datasource');
-    if (cached?.fee?.number) ds.fee = cached.fee;
+    if (cached?.fee?.number) {
+      // 兼容旧缓存的小数格式，统一转整数元
+      const n = Math.round(parseFloat(cached.fee.number));
+      ds.fee = { ...cached.fee, number: Number.isFinite(n) ? String(n) : cached.fee.number };
+    }
   }
   ctx.storage.setJSON('ct_datasource', ds);
   return ds;
