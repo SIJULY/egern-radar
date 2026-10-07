@@ -1,6 +1,6 @@
 name: "中国电信"
 description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新"
-author: "小龙女她爸"
+author: "小秘书"
 
 # 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
 mitm:
@@ -31,6 +31,6 @@ widgets:
     #   CT_SHOW_USED_FLOW: "false"        # 'true' 显示已用流量，否则显示剩余流量
     #   CT_FILTER_ORIENTATE_FLOW: "false" # 'true' 过滤定向流量
     #   CT_TITLE: "中国电信"               # 小组件标题
-    #   CT_WIDGET_STYLE: "glass"          # 'glass' 卡片半透明（默认，透出系统磨砂）；'classic' 卡片实底色
+    #   CT_WIDGET_STYLE: "glass"          # 'classic' 卡片实底色（默认）；'glass' 卡片半透明，透出系统磨砂
     #   CT_LOGIN_URL: ""                  # 手动指定登录地址（自动捕获失败时的备用）
     #   CT_COOKIE: ""                     # 直接填写 cookie（备用）

@@ -309,9 +309,9 @@ function buildSmall(title, ds, fromCache) {
 }
 
 function buildMedium(title, ds, fromCache, ctx) {
-  // CT_WIDGET_STYLE=glass（默认）：卡片半透明，透出 iOS 系统磨砂背景
-  // CT_WIDGET_STYLE=classic：卡片实底色
-  const style = String((ctx && ctx.env && ctx.env.CT_WIDGET_STYLE) || 'glass').toLowerCase();
+  // CT_WIDGET_STYLE=classic（默认）：卡片实底色
+  // CT_WIDGET_STYLE=glass：卡片半透明，透出 iOS 系统磨砂背景
+  const style = String((ctx && ctx.env && ctx.env.CT_WIDGET_STYLE) || 'classic').toLowerCase();
   const cardBg =
     style === 'classic'
       ? { light: '#F2F2F7', dark: '#1C1C1E' }
