@@ -281,9 +281,9 @@ function quadCard(icon, color, data, cardBg, fourCard) {
       {
         type: 'text',
         text: numberText,
-        font: { size: fourCard ? 'headline' : 'title2', weight: 'bold' },
+        font: { size: fourCard ? 'footnote' : 'title2', weight: 'bold' },
         maxLines: 1,
-        minScale: 0.6,
+        minScale: fourCard ? 0.9 : 0.7,
       },
     ],
   };
