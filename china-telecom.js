@@ -29,13 +29,6 @@ const VOICE_COLOR = '#78C100';
 
 /* ---------- 工具函数 ---------- */
 
-function hexToRgb(hex) {
-  let h = String(hex).replace('#', '');
-  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
-  const n = parseInt(h, 16);
-  return `rgb(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255})`;
-}
-
 function formatFlow(flow) {
   const remain = flow / 1024; // 接口单位换算：与原版保持一致
   if (remain < 1024) return { amount: remain.toFixed(2), unit: 'MB' };
@@ -215,25 +208,14 @@ async function loadData(ctx) {
 
 /* ---------- 渲染层（Widget DSL） ---------- */
 
-// SVG 进度圆环（Egern 2.20+ 支持内联 SVG 矢量渲染）
-function ringSVG({ percent, size = 64, strokeWidth = 9, color }) {
-  const r = (size - strokeWidth) / 2;
-  const c = 2 * Math.PI * r;
-  const p = Math.max(0, Math.min(100, Number(percent) || 0));
-  const offset = c * (1 - p / 100);
-  const fg = hexToRgb(color);
-  const track = fg.replace('rgb(', 'rgba(').replace(')', ',0.18)');
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${size} ${size}'>` +
-    `<circle cx='${size / 2}' cy='${size / 2}' r='${r}' fill='none' stroke='${track}' stroke-width='${strokeWidth}'/>` +
-    `<circle cx='${size / 2}' cy='${size / 2}' r='${r}' fill='none' stroke='${fg}' stroke-width='${strokeWidth}'` +
-    ` stroke-linecap='round' stroke-dasharray='${c.toFixed(2)}' stroke-dashoffset='${offset.toFixed(2)}'` +
-    ` transform='rotate(-90 ${size / 2} ${size / 2})'/>` +
-    `</svg>`;
-  return 'data:image/svg+xml,' + svg;
-}
+// 三卡统一图标
+const FEE_ICON = 'yensign.circle.fill';
+const FEE_ICON_COLOR = '#FF9500';
+const FLOW_ICON = 'antenna.radiowaves.left.and.right';
+const VOICE_ICON = 'phone.circle.fill';
 
-function ringCard(data, ringSize) {
+// 统一的三段式小卡：图标 + 数值行 + 标题
+function statCard(icon, color, size, data) {
   return {
     type: 'stack',
     direction: 'column',
@@ -243,9 +225,10 @@ function ringCard(data, ringSize) {
     children: [
       {
         type: 'image',
-        src: ringSVG({ percent: data.percent, size: ringSize, color: data.color }),
-        width: ringSize,
-        height: ringSize,
+        src: `sf-symbol:${icon}`,
+        width: size,
+        height: size,
+        color,
       },
       {
         type: 'text',
@@ -319,7 +302,7 @@ function buildSmall(title, ds, fromCache) {
         type: 'stack',
         direction: 'row',
         gap: 10,
-        children: [ringCard(ds.flow, 58), ringCard(ds.voice, 58)],
+        children: [statCard(FLOW_ICON, ds.flow.color, 58, ds.flow), statCard(VOICE_ICON, ds.voice.color, 58, ds.voice)],
       },
     ],
   };
@@ -348,58 +331,9 @@ function buildMedium(title, ds, fromCache) {
         direction: 'row',
         gap: 8,
         children: [
-          card([
-            {
-              type: 'image',
-              src: 'sf-symbol:yensign.circle.fill',
-              width: 62,
-              height: 62,
-              color: '#FF9500',
-            },
-            {
-              type: 'text',
-              text: `${ds.fee.number} ${ds.fee.unit}`,
-              font: { size: 'subheadline', weight: 'semibold' },
-              textAlign: 'center',
-              maxLines: 1,
-              minScale: 0.6,
-            },
-            { type: 'text', text: ds.fee.title, font: { size: 'caption2' }, opacity: 0.6 },
-          ]),
-          card([
-            {
-              type: 'image',
-              src: ringSVG({ percent: ds.flow.percent, size: 62, color: ds.flow.color }),
-              width: 62,
-              height: 62,
-            },
-            {
-              type: 'text',
-              text: `${ds.flow.number} ${ds.flow.unit}`,
-              font: { size: 'subheadline', weight: 'semibold' },
-              textAlign: 'center',
-              maxLines: 1,
-              minScale: 0.6,
-            },
-            { type: 'text', text: ds.flow.title, font: { size: 'caption2' }, opacity: 0.6 },
-          ]),
-          card([
-            {
-              type: 'image',
-              src: ringSVG({ percent: ds.voice.percent, size: 62, color: ds.voice.color }),
-              width: 62,
-              height: 62,
-            },
-            {
-              type: 'text',
-              text: `${ds.voice.number} ${ds.voice.unit}`,
-              font: { size: 'subheadline', weight: 'semibold' },
-              textAlign: 'center',
-              maxLines: 1,
-              minScale: 0.6,
-            },
-            { type: 'text', text: ds.voice.title, font: { size: 'caption2' }, opacity: 0.6 },
-          ]),
+          card(statCard(FEE_ICON, FEE_ICON_COLOR, 62, ds.fee).children),
+          card(statCard(FLOW_ICON, ds.flow.color, 62, ds.flow).children),
+          card(statCard(VOICE_ICON, ds.voice.color, 62, ds.voice).children),
         ],
       },
     ],
