@@ -300,7 +300,13 @@ function buildSmall(title, ds, fromCache) {
         children: [
           { type: 'text', text: ds.fee.title, font: { size: 'footnote' }, opacity: 0.65 },
           { type: 'spacer' },
-          { type: 'text', text: ds.fee.number, font: { size: 'title2', weight: 'bold' } },
+          {
+            type: 'text',
+            text: ds.fee.number,
+            font: { size: 'title2', weight: 'bold' },
+            maxLines: 1,
+            minScale: 0.7,
+          },
           {
             type: 'text',
             text: ` ${ds.fee.unit}`,
@@ -343,11 +349,22 @@ function buildMedium(title, ds, fromCache) {
         gap: 8,
         children: [
           card([
-            { type: 'text', text: ds.fee.title, font: { size: 'caption1' }, opacity: 0.65 },
-            { type: 'spacer', length: 10 },
-            { type: 'text', text: ds.fee.number, font: { size: 'title', weight: 'bold' } },
-            { type: 'text', text: ds.fee.unit, font: { size: 'footnote' }, opacity: 0.65 },
-            { type: 'spacer', length: 10 },
+            {
+              type: 'image',
+              src: 'sf-symbol:yensign.circle.fill',
+              width: 62,
+              height: 62,
+              color: '#FF9500',
+            },
+            {
+              type: 'text',
+              text: `${ds.fee.number} ${ds.fee.unit}`,
+              font: { size: 'subheadline', weight: 'semibold' },
+              textAlign: 'center',
+              maxLines: 1,
+              minScale: 0.6,
+            },
+            { type: 'text', text: ds.fee.title, font: { size: 'caption2' }, opacity: 0.6 },
           ]),
           card([
             {
