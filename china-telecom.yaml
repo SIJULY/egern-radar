@@ -52,5 +52,7 @@ widgets:
   # 小组件在 iOS「编辑小组件」列表里显示为「中国电信」，通过 script_name 关联 generic 脚本
   - name: "中国电信"
     script_name: "china-telecom"
+    env:
+      CT_GLASS: "true"
     # 高级选项（一般不用动），也可在模块设置页的开关/输入框里改：
     # env:
