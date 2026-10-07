@@ -272,8 +272,8 @@ function quadCard(icon, color, data, cardBg) {
     backgroundColor: cardBg,
     gap: 2,
     children: [
-      { type: 'image', src: `sf-symbol:${icon}`, width: 22, height: 22, color },
-      { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption1' }, opacity: 0.75, maxLines: 1 },
+      { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color },
+      { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
       {
         type: 'text',
         text: String(data.number),
@@ -380,7 +380,7 @@ function buildSmall(title, ds, fromCache, ctx) {
 function buildMedium(title, ds, fromCache, ctx) {
   // CT_GLASS=true：卡片半透明，透出 iOS 系统磨砂背景（兼容旧的 CT_WIDGET_STYLE=glass）
   const cardBg = isGlass(ctx)
-    ? { light: 'rgba(255,255,255,0.18)', dark: 'rgba(255,255,255,0.08)' }
+    ? { light: '#FFFFFF59', dark: '#FFFFFF26' }
     : { light: '#F2F2F7', dark: '#1C1C1E' };
 
   return {
