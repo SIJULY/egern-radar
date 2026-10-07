@@ -265,13 +265,7 @@ const VOICE_ICON_COLOR = '#34C759';
 // fourCard=true（4 卡挤）时：标题不带单位，单位跟在数字后面，数字字号自动缩小
 function quadCard(icon, color, data, fourCard) {
   const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
-  // 4 卡时话费取整（3 卡保留两位小数）
-  let num = data.number;
-  if (fourCard && data.unit === '元') {
-    const r = Math.round(parseFloat(num));
-    if (Number.isFinite(r)) num = String(r);
-  }
-  const numberText = fourCard ? `${num}${data.unit}` : String(data.number);
+  const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
   return {
     type: 'stack',
     direction: 'column',
@@ -309,7 +303,7 @@ function miniCard(icon, color, data) {
         maxLines: 1,
         minScale: 0.7,
       },
-      { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
+      { type: 'text', text: data.title, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
     ],
   };
 }
