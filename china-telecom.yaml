@@ -2,6 +2,12 @@ name: "中国电信"
 description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；Safari 短信登录一次后全自动更新"
 author: "小秘书"
 
+# 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
+mitm:
+  hostnames:
+    includes:
+      - e.dlife.cn
+
 scriptings:
   # 小组件脚本（generic 类型）
   - generic:

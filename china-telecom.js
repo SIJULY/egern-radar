@@ -441,7 +441,12 @@ async function handleCapture(ctx) {
   ctx.storage.set('ct_login_url', loginUrl);
   // 顺手把旧 cookie 清掉，避免新旧会话混用
   ctx.storage.delete('ct_cookie');
-  ctx.notify({ title: '中国电信', body: '登录成功，小组件将自动更新' });
+  ctx.notify({
+    title: '中国电信',
+    body: '登录成功，小组件将自动更新',
+    // 兜底：如果小组件没自动读到，点通知手动复制登录地址
+    action: { type: 'clipboard', text: loginUrl },
+  });
 }
 
 /* ---------- 小组件（generic 脚本模式） ---------- */
