@@ -1,24 +1,28 @@
 name: "中国电信"
-description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音"
+description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；Safari 短信登录一次后全自动更新"
 author: "小秘书"
 
 scriptings:
+  # 小组件脚本（generic 类型）
   - generic:
       name: "china-telecom"
-      # raw 链接（与本仓库 china-telecom.js 对应）
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 20
+  # 登录捕获（http_request 类型，与小组件是同一个文件，脚本内部按 ctx.request 自动分支）
+  # Safari 里登录 e.dlife.cn 成功时自动捕获登录地址存入存储，小组件自动读取，全程无需手动操作
+  - http_request:
+      name: "中国电信登录捕获"
+      match: '^https://e\.dlife\.cn/user/loginMiddle'
+      script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
+      timeout: 10
 
 widgets:
+  # 与同名 generic 脚本自动关联；登录地址由捕获脚本自动存入存储，无需手动配置 Env
   - name: "china-telecom"
-    env:
-      # 电信登录地址（抓包得到的登录 URL，用于自动更新 cookie），必填其一
-      CT_LOGIN_URL: ""
-      # 也可直接填写抓到的 cookie（与 CT_LOGIN_URL 二选一）
-      # CT_COOKIE: ""
-      # 'true' 显示已用流量，否则显示剩余流量
-      # CT_SHOW_USED_FLOW: "false"
-      # 'true' 过滤定向流量
-      # CT_FILTER_ORIENTATE_FLOW: "false"
-      # 小组件标题
-      # CT_TITLE: "中国电信"
+    # 高级选项（一般不用动）：
+    # env:
+    #   CT_SHOW_USED_FLOW: "false"        # 'true' 显示已用流量，否则显示剩余流量
+    #   CT_FILTER_ORIENTATE_FLOW: "false" # 'true' 过滤定向流量
+    #   CT_TITLE: "中国电信"               # 小组件标题
+    #   CT_LOGIN_URL: ""                  # 手动指定登录地址（自动捕获失败时的备用）
+    #   CT_COOKIE: ""                     # 直接填写 cookie（备用）
