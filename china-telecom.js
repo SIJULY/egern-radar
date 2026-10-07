@@ -51,7 +51,9 @@ function fmtTime(ts) {
 /* ---------- 数据层 ---------- */
 
 async function refreshCookie(ctx) {
-  const loginUrl = (ctx.env.CT_LOGIN_URL || '').trim();
+  // 登录地址来源：Env 的 CT_LOGIN_URL 优先，其次用捕获脚本存下的地址
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() || ctx.storage.get('ct_login_url') || '';
   if (!loginUrl) return ctx.storage.get('ct_cookie') || '';
   const url = (loginUrl.match(/(http.+)&sign/) || [])[1] || loginUrl;
   const resp = await ctx.http.get(url, {
@@ -161,7 +163,8 @@ function parseTelecom(detail, balance, opts) {
 
 async function loadData(ctx) {
   const envCookie = (ctx.env.CT_COOKIE || '').trim();
-  const loginUrl = (ctx.env.CT_LOGIN_URL || '').trim();
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() || ctx.storage.get('ct_login_url') || '';
   const settings = {
     showUsedFlow: ctx.env.CT_SHOW_USED_FLOW === 'true',
     filterOrientateFlow: ctx.env.CT_FILTER_ORIENTATE_FLOW === 'true',
