@@ -187,7 +187,7 @@ function parseTelecom(detail, balance, opts) {
   const feeNum = Number(balance?.totalBalanceAvailable);
   const fee = {
     title: '话费余额',
-    number: Number.isFinite(feeNum) ? (feeNum / 100).toFixed(2) : '0.00',
+    number: Number.isFinite(feeNum) ? Math.round(feeNum / 100).toString() : '0',
     unit: '元',
   };
 
