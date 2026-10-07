@@ -196,6 +196,12 @@ async function tryCookie(ctx, cookie, settings) {
   const detail = await fetchJson(ctx, URLS.detail, cookie);
   const balance = await fetchJson(ctx, URLS.balance, cookie);
   const ds = parseTelecom(detail, balance, settings);
+  // balance.do 偶发返回空/异常时，用上次缓存的话费顶住，避免误显示 0.00
+  const feeRaw = balance?.totalBalanceAvailable;
+  if (feeRaw === undefined || feeRaw === null || feeRaw === '') {
+    const cached = ctx.storage.getJSON('ct_datasource');
+    if (cached?.fee?.number) ds.fee = cached.fee;
+  }
   ctx.storage.setJSON('ct_datasource', ds);
   return ds;
 }
