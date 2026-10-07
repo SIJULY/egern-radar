@@ -308,7 +308,14 @@ function buildSmall(title, ds, fromCache) {
   };
 }
 
-function buildMedium(title, ds, fromCache) {
+function buildMedium(title, ds, fromCache, ctx) {
+  // CT_WIDGET_STYLE=glass（默认）：卡片半透明，透出 iOS 系统磨砂背景
+  // CT_WIDGET_STYLE=classic：卡片实底色
+  const style = String((ctx && ctx.env && ctx.env.CT_WIDGET_STYLE) || 'glass').toLowerCase();
+  const cardBg =
+    style === 'classic'
+      ? { light: '#F2F2F7', dark: '#1C1C1E' }
+      : { light: 'rgba(255,255,255,0.18)', dark: 'rgba(255,255,255,0.08)' };
   const card = (children) => ({
     type: 'stack',
     direction: 'column',
@@ -316,7 +323,7 @@ function buildMedium(title, ds, fromCache) {
     flex: 1,
     padding: 10,
     borderRadius: 12,
-    backgroundColor: { light: '#F2F2F7', dark: '#1C1C1E' },
+    backgroundColor: cardBg,
     children,
   });
   return {
@@ -462,7 +469,7 @@ async function handleWidget(ctx) {
 
   const family = ctx.widgetFamily || 'systemSmall';
   if (family === 'systemMedium' || family === 'systemLarge' || family === 'systemExtraLarge') {
-    return buildMedium(title, ds, fromCache);
+    return buildMedium(title, ds, fromCache, ctx);
   }
   if (family.startsWith('accessory')) {
     return buildLockScreen(title, ds, family);

@@ -31,5 +31,6 @@ widgets:
     #   CT_SHOW_USED_FLOW: "false"        # 'true' 显示已用流量，否则显示剩余流量
     #   CT_FILTER_ORIENTATE_FLOW: "false" # 'true' 过滤定向流量
     #   CT_TITLE: "中国电信"               # 小组件标题
+    #   CT_WIDGET_STYLE: "glass"          # 'glass' 卡片半透明（默认，透出系统磨砂）；'classic' 卡片实底色
     #   CT_LOGIN_URL: ""                  # 手动指定登录地址（自动捕获失败时的备用）
     #   CT_COOKIE: ""                     # 直接填写 cookie（备用）
