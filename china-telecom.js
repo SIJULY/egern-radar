@@ -406,8 +406,8 @@ function buildLockScreen(title, ds, family) {
   };
 }
 
-function buildError(title, message) {
-  return {
+function buildError(title, message, url) {
+  const w = {
     type: 'widget',
     padding: 14,
     gap: 6,
@@ -423,6 +423,8 @@ function buildError(title, message) {
       { type: 'text', text: message, font: { size: 'caption1' }, opacity: 0.7 },
     ],
   };
+  if (url) w.url = url; // 点小组件直接跳转（比如跳到登录页）
+  return w;
 }
 
 /* ---------- 登录捕获（request 脚本模式） ---------- */
@@ -458,7 +460,8 @@ async function handleWidget(ctx) {
   if (!configured) {
     return buildError(
       title,
-      '未登录：在 Safari 登录 e.dlife.cn（需安装 Request 捕获脚本）或配置 CT_LOGIN_URL'
+      '未登录：点我去登录，短信验证一次即可',
+      URLS.login
     );
   }
   if (!ds) {
