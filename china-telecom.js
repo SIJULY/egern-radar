@@ -379,7 +379,8 @@ function buildSmall(title, ds, fromCache, ctx) {
 }
 
 function buildMedium(title, ds, fromCache, ctx) {
-  const cardBg = { light: '#F2F2F7', dark: '#1C1C1E' };
+  // 卡片半透明（无开关，默认开启）
+  const cardBg = { light: '#FFFFFF59', dark: '#FFFFFF26' };
 
   return {
     type: 'widget',
