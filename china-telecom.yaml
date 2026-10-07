@@ -1,6 +1,6 @@
 name: "中国电信"
 description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新"
-author: "小秘书"
+author: "小龙女她爸"
 
 # 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
 mitm:
@@ -11,7 +11,7 @@ mitm:
 scriptings:
   # 小组件脚本（generic 类型）
   - generic:
-      name: "china-telecom"
+      name: "电信小组件"
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 20
   # 登录捕获（http_request 类型，与小组件是同一个文件，脚本内部按 ctx.request 自动分支）
