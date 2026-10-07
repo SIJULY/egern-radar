@@ -11,7 +11,6 @@
  *   CT_LOGIN_URL            电信登录地址（抓包得到的登录 URL，用于自动更新 cookie）
  *   CT_COOKIE               直接填写 cookie（与 CT_LOGIN_URL 二选一，URL 优先）
  *   CT_SHOW_USED_FLOW       'true' 显示已用流量，否则显示剩余流量
- *   CT_FILTER_ORIENTATE_FLOW 'true' 过滤定向流量
  *   CT_TITLE                小组件标题，默认 "中国电信"
  *
  * 数据来源：https://e.dlife.cn/user/package_detail.do
@@ -24,8 +23,6 @@ const URLS = {
   balance: 'https://e.dlife.cn/user/balance.do',
 };
 
-const FLOW_COLOR = '#FF6620';
-const VOICE_COLOR = '#78C100';
 
 /* ---------- 工具函数 ---------- */
 
@@ -114,10 +111,9 @@ async function fetchJson(ctx, url, cookie) {
 
 // 解析套餐详情 + 余额，逻辑与原 Scriptable 版保持一致
 function parseTelecom(detail, balance, opts) {
-  const { showUsedFlow, filterOrientateFlow } = opts;
-  let totalFlowAmount = 0;
-  let totalBalanceFlowAmount = 0;
-  let totalUsedFlowAmount = 0;
+  const { showUsedFlow } = opts || {};
+  let genTotal = 0, genBalance = 0, genUsed = 0;
+  let dirTotal = 0, dirBalance = 0, dirUsed = 0;
   let totalVoiceAmount = 0;
   let totalBalanceVoiceAmount = 0;
   let isUnlimitedFlow = false;
@@ -126,17 +122,16 @@ function parseTelecom(detail, balance, opts) {
     if (data.offerType === 19) continue;
     for (const item of data.items || []) {
       if (item.unitTypeId == 3) {
-        if (!(item.usageAmount == 0 && item.balanceAmount == 0)) {
-          const isDirectional = /定向/.test(item.ratableResourcename || '');
-          const skip =
-            item.balanceAmount == '999999999999' ||
-            (filterOrientateFlow && isDirectional);
-          if (!skip) {
-            totalFlowAmount += parseFloat(item.ratableAmount) || 0;
-            totalBalanceFlowAmount += parseFloat(item.balanceAmount) || 0;
-          }
+        const isDirectional = /定向/.test(item.ratableResourcename || '');
+        const isInvalid = item.balanceAmount == '999999999999';
+        if (!(item.usageAmount == 0 && item.balanceAmount == 0) && !isInvalid) {
+          const t = parseFloat(item.ratableAmount) || 0;
+          const b = parseFloat(item.balanceAmount) || 0;
+          if (isDirectional) { dirTotal += t; dirBalance += b; }
+          else { genTotal += t; genBalance += b; }
         }
-        totalUsedFlowAmount += parseFloat(item.usageAmount) || 0;
+        const u = parseFloat(item.usageAmount) || 0;
+        if (isDirectional) dirUsed += u; else genUsed += u;
         if (data.offerType == 21 && item.ratableAmount == '0') {
           isUnlimitedFlow = true;
         }
@@ -151,43 +146,50 @@ function parseTelecom(detail, balance, opts) {
     totalBalanceVoiceAmount = detail.voiceBalance;
   }
 
-  const balanceFlow = formatFlow(totalBalanceFlowAmount);
-  const usedFlow = formatFlow(totalUsedFlowAmount);
-
-  const flow = {
-    title: '剩余流量',
-    number: balanceFlow.amount,
-    unit: balanceFlow.unit,
-    percent: +(((totalBalanceFlowAmount / (totalFlowAmount || 1)) * 100).toFixed(2)),
-    color: FLOW_COLOR,
+  const mkFlow = (remainTitle, total, balanceAmt, usedAmt) => {
+    const bal = formatFlow(balanceAmt);
+    const used = formatFlow(usedAmt);
+    const f = {
+      title: remainTitle,
+      number: bal.amount,
+      unit: bal.unit,
+      percent: +(((balanceAmt / (total || 1)) * 100).toFixed(2)),
+    };
+    if (showUsedFlow) {
+      f.title = remainTitle.replace('剩余', '已用');
+      f.number = used.amount;
+      f.unit = used.unit;
+    }
+    return f;
   };
-  if (showUsedFlow) {
-    flow.title = '已用流量';
-    flow.number = usedFlow.amount;
-    flow.unit = usedFlow.unit;
-  }
+
+  const generalFlow = mkFlow('通用剩余', genTotal, genBalance, genUsed);
+  generalFlow.color = GENERAL_ICON_COLOR;
   if (isUnlimitedFlow) {
-    flow.title = '已用流量';
-    flow.number = usedFlow.amount;
-    flow.unit = usedFlow.unit;
+    const used = formatFlow(genUsed);
+    generalFlow.title = '通用已用';
+    generalFlow.number = used.amount;
+    generalFlow.unit = used.unit;
   }
+  const directFlow = mkFlow('定向剩余', dirTotal, dirBalance, dirUsed);
+  directFlow.color = DIRECT_ICON_COLOR;
 
   const voice = {
-    title: '剩余语音',
+    title: '语音剩余',
     number: `${totalBalanceVoiceAmount}`,
     unit: '分钟',
     percent: +(((totalBalanceVoiceAmount / (totalVoiceAmount || 1)) * 100).toFixed(2)),
-    color: VOICE_COLOR,
+    color: VOICE_ICON_COLOR,
   };
 
   const feeNum = Number(balance?.totalBalanceAvailable);
   const fee = {
-    title: '剩余话费',
+    title: '话费余额',
     number: Number.isFinite(feeNum) ? (feeNum / 100).toFixed(2) : '0.00',
     unit: '元',
   };
 
-  return { fee, flow, voice, updatedAt: Date.now() };
+  return { fee, generalFlow, directFlow, voice, updatedAt: Date.now() };
 }
 
 async function tryCookie(ctx, cookie, settings) {
@@ -204,7 +206,6 @@ async function loadData(ctx) {
     (ctx.env.CT_LOGIN_URL || '').trim() || ctx.storage.get('ct_login_url') || '';
   const settings = {
     showUsedFlow: ctx.env.CT_SHOW_USED_FLOW === 'true',
-    filterOrientateFlow: ctx.env.CT_FILTER_ORIENTATE_FLOW === 'true',
   };
   const storedCookie = ctx.storage.get('ct_cookie') || '';
   // 只要配了登录地址/cookie，或之前抓到过 cookie，就视为"已配置"
@@ -241,43 +242,60 @@ async function loadData(ctx) {
 
 /* ---------- 渲染层（Widget DSL） ---------- */
 
-// 三卡统一图标
+// 四卡图标：话费¥ / 通用蜂窝 / 定向闪电 / 语音电话
 const FEE_ICON = 'yensign.circle.fill';
 const FEE_ICON_COLOR = '#FF9500';
-const FLOW_ICON = 'antenna.radiowaves.left.and.right';
+const GENERAL_ICON = 'antenna.radiowaves.left.and.right';
+const GENERAL_ICON_COLOR = '#0A84FF';
+const DIRECT_ICON = 'bolt.fill';
+const DIRECT_ICON_COLOR = '#AF52DE';
 const VOICE_ICON = 'phone.circle.fill';
+const VOICE_ICON_COLOR = '#34C759';
 
-// 统一的三段式小卡：图标 + 数值行 + 标题
-function statCard(icon, color, size, data) {
+// 四卡统一：小图标 / 标题 / 大数值 / 单位
+function quadCard(icon, color, data, cardBg) {
   return {
     type: 'stack',
     direction: 'column',
     alignItems: 'center',
-    gap: 2,
     flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: cardBg,
+    gap: 2,
     children: [
-      {
-        type: 'image',
-        src: `sf-symbol:${icon}`,
-        width: size,
-        height: size,
-        color,
-      },
+      { type: 'image', src: `sf-symbol:${icon}`, width: 22, height: 22, color },
+      { type: 'text', text: data.title, font: { size: 'caption1' }, opacity: 0.75, maxLines: 1 },
       {
         type: 'text',
-        text: `${data.number} ${data.unit}`,
-        font: { size: 'subheadline', weight: 'semibold' },
-        textAlign: 'center',
+        text: String(data.number),
+        font: { size: 'title2', weight: 'bold' },
         maxLines: 1,
-        minScale: 0.6,
+        minScale: 0.7,
       },
+      { type: 'text', text: data.unit, font: { size: 'caption2' }, opacity: 0.5 },
+    ],
+  };
+}
+
+// 小尺寸 2x2 紧凑卡
+function miniCard(icon, color, data) {
+  return {
+    type: 'stack',
+    direction: 'column',
+    alignItems: 'center',
+    flex: 1,
+    gap: 1,
+    children: [
+      { type: 'image', src: `sf-symbol:${icon}`, width: 18, height: 18, color },
       {
         type: 'text',
-        text: data.title,
-        font: { size: 'caption2' },
-        textAlign: 'center',
-        opacity: 0.6,
+        text: `${data.number}${data.unit}`,
+        font: { size: 'footnote', weight: 'semibold' },
+        maxLines: 1,
+        minScale: 0.7,
       },
+      { type: 'text', text: data.title, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
     ],
   };
 }
@@ -304,38 +322,28 @@ function headerRow(title, ds, fromCache) {
 function buildSmall(title, ds, fromCache) {
   return {
     type: 'widget',
-    padding: 14,
-    gap: 8,
+    padding: 12,
+    gap: 6,
     refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     children: [
       headerRow(title, ds, fromCache),
       {
         type: 'stack',
         direction: 'row',
-        alignItems: 'center',
+        gap: 6,
         children: [
-          { type: 'text', text: ds.fee.title, font: { size: 'footnote' }, opacity: 0.65 },
-          { type: 'spacer' },
-          {
-            type: 'text',
-            text: ds.fee.number,
-            font: { size: 'title2', weight: 'bold' },
-            maxLines: 1,
-            minScale: 0.7,
-          },
-          {
-            type: 'text',
-            text: ` ${ds.fee.unit}`,
-            font: { size: 'footnote' },
-            opacity: 0.65,
-          },
+          miniCard(FEE_ICON, FEE_ICON_COLOR, ds.fee),
+          miniCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow),
         ],
       },
       {
         type: 'stack',
         direction: 'row',
-        gap: 10,
-        children: [statCard(FLOW_ICON, ds.flow.color, 58, ds.flow), statCard(VOICE_ICON, ds.voice.color, 58, ds.voice)],
+        gap: 6,
+        children: [
+          miniCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow),
+          miniCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice),
+        ],
       },
     ],
   };
@@ -349,16 +357,7 @@ function buildMedium(title, ds, fromCache, ctx) {
     style === 'classic'
       ? { light: '#F2F2F7', dark: '#1C1C1E' }
       : { light: 'rgba(255,255,255,0.18)', dark: 'rgba(255,255,255,0.08)' };
-  const card = (children) => ({
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    flex: 1,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: cardBg,
-    children,
-  });
+
   return {
     type: 'widget',
     padding: 12,
@@ -371,9 +370,10 @@ function buildMedium(title, ds, fromCache, ctx) {
         direction: 'row',
         gap: 8,
         children: [
-          card(statCard(FEE_ICON, FEE_ICON_COLOR, 62, ds.fee).children),
-          card(statCard(FLOW_ICON, ds.flow.color, 62, ds.flow).children),
-          card(statCard(VOICE_ICON, ds.voice.color, 62, ds.voice).children),
+          quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, cardBg),
+          quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, cardBg),
+          quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, cardBg),
+          quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, cardBg),
         ],
       },
     ],
@@ -403,7 +403,7 @@ function buildLockScreen(title, ds, family) {
       { type: 'text', text: title, font: { size: 'caption2', weight: 'semibold' } },
       {
         type: 'text',
-        text: `¥${ds.fee.number} · ${ds.flow.number}${ds.flow.unit} · ${ds.voice.number}分`,
+        text: `¥${ds.fee.number} · ${ds.generalFlow.number}${ds.generalFlow.unit} · ${ds.voice.number}分`,
         font: { size: 'footnote' },
         maxLines: 1,
         minScale: 0.6,
