@@ -187,7 +187,7 @@ function parseTelecom(detail, balance, opts) {
   const feeNum = Number(balance?.totalBalanceAvailable);
   const fee = {
     title: '话费余额',
-    number: Number.isFinite(feeNum) ? Math.round(feeNum / 100).toString() : '0',
+    number: Number.isFinite(feeNum) ? (feeNum / 100).toFixed(2) : '0.00',
     unit: '元',
   };
 
@@ -202,11 +202,7 @@ async function tryCookie(ctx, cookie, settings) {
   const feeRaw = balance?.totalBalanceAvailable;
   if (feeRaw === undefined || feeRaw === null || feeRaw === '') {
     const cached = ctx.storage.getJSON('ct_datasource');
-    if (cached?.fee?.number) {
-      // 兼容旧缓存的小数格式，统一转整数元
-      const n = Math.round(parseFloat(cached.fee.number));
-      ds.fee = { ...cached.fee, number: Number.isFinite(n) ? String(n) : cached.fee.number };
-    }
+    if (cached?.fee?.number) ds.fee = cached.fee;
   }
   ctx.storage.setJSON('ct_datasource', ds);
   return ds;
@@ -269,7 +265,13 @@ const VOICE_ICON_COLOR = '#34C759';
 // fourCard=true（4 卡挤）时：标题不带单位，单位跟在数字后面，数字字号自动缩小
 function quadCard(icon, color, data, cardBg, fourCard) {
   const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
-  const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
+  // 4 卡时话费取整（3 卡保留两位小数）
+  let num = data.number;
+  if (fourCard && data.unit === '元') {
+    const r = Math.round(parseFloat(num));
+    if (Number.isFinite(r)) num = String(r);
+  }
+  const numberText = fourCard ? `${num}${data.unit}` : String(data.number);
   return {
     type: 'stack',
     direction: 'column',
