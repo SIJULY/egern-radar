@@ -3,14 +3,7 @@ description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语
 author: "小秘书"
 
 # 模块设置页的开关（options 为 ["true","false"] 时生成开关 UI）
-# 注意：Egern 可能存在 bug 导致开关值不写入，建议以代码默认值为准
 env_schema:
-  CT_GLASS:
-    name: 半透明效果
-    description: 打开后卡片半透明（代码默认已开启，此开关备用）
-    options:
-      - "true"
-      - "false"
   CT_SHOW_DIRECT:
     name: 显示定向流量卡
     description: 关闭后隐藏定向卡片变为三卡；不设置则按是否有定向数据自动判断

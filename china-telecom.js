@@ -11,7 +11,7 @@
  *   CT_LOGIN_URL            电信登录地址（抓包得到的登录 URL，用于自动更新 cookie）
  *   CT_COOKIE               直接填写 cookie（与 CT_LOGIN_URL 二选一，URL 优先）
  *   CT_SHOW_USED_FLOW       'true' 显示已用流量，否则显示剩余流量
- *   CT_GLASS                'true' 卡片半透明 glass 效果，默认实底色
+
  *   CT_SHOW_DIRECT          'false' 隐藏定向卡（3卡模式）；'true' 强制4卡；不填则自动判断
  *   CT_TITLE                小组件标题，默认 "中国电信"
  *
@@ -261,7 +261,11 @@ const VOICE_ICON = 'phone.circle.fill';
 const VOICE_ICON_COLOR = '#34C759';
 
 // 四卡统一：小图标 / 标题(含单位) / 大数值
-function quadCard(icon, color, data, cardBg) {
+// 卡片统一：小图标 / 标题 / 大数值
+// fourCard=true（4 卡挤）时：标题不带单位，单位跟在数字后面，数字字号自动缩小
+function quadCard(icon, color, data, cardBg, fourCard) {
+  const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
+  const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
   return {
     type: 'stack',
     direction: 'column',
@@ -273,13 +277,13 @@ function quadCard(icon, color, data, cardBg) {
     gap: 2,
     children: [
       { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color },
-      { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
+      { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
       {
         type: 'text',
-        text: String(data.number),
-        font: { size: 'title2', weight: 'bold' },
+        text: numberText,
+        font: { size: fourCard ? 'headline' : 'title2', weight: 'bold' },
         maxLines: 1,
-        minScale: 0.7,
+        minScale: 0.6,
       },
     ],
   };
@@ -305,15 +309,6 @@ function miniCard(icon, color, data) {
       { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
     ],
   };
-}
-
-// 半透明默认开启（Egern 模块 Env 不可靠，不依赖环境变量）；
-// 如需关闭，在模块 Env 手动添加 CT_GLASS=false（若 Egern 修好则生效）
-function isGlass(ctx) {
-  const v = String(ctx?.env?.CT_GLASS || '').toLowerCase();
-  if (v === 'false') return false;
-  if (v === 'true') return true;
-  return true;
 }
 
 // 开关2：CT_SHOW_DIRECT=false → 3卡模式（隐藏定向）；=true → 强制4卡；不填 → 有定向数据才显示
@@ -378,10 +373,7 @@ function buildSmall(title, ds, fromCache, ctx) {
 }
 
 function buildMedium(title, ds, fromCache, ctx) {
-  // CT_GLASS=true：卡片半透明，透出 iOS 系统磨砂背景（兼容旧的 CT_WIDGET_STYLE=glass）
-  const cardBg = isGlass(ctx)
-    ? { light: '#FFFFFF59', dark: '#FFFFFF26' }
-    : { light: '#F2F2F7', dark: '#1C1C1E' };
+  const cardBg = { light: '#F2F2F7', dark: '#1C1C1E' };
 
   return {
     type: 'widget',
@@ -394,14 +386,15 @@ function buildMedium(title, ds, fromCache, ctx) {
         type: 'stack',
         direction: 'row',
         gap: 8,
-        children: [
-          quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, cardBg),
-          quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, cardBg),
-          ...(showDirectCard(ctx, ds)
-            ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, cardBg)]
-            : []),
-          quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, cardBg),
-        ],
+        children: (() => {
+          const four = showDirectCard(ctx, ds);
+          return [
+            quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, cardBg, four),
+            quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, cardBg, four),
+            ...(four ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, cardBg, four)] : []),
+            quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, cardBg, four),
+          ];
+        })(),
       },
     ],
   };
