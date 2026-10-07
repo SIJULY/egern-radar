@@ -2,6 +2,31 @@ name: "中国电信"
 description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新"
 author: "小秘书"
 
+# 模块设置页自动生成的 UI 控件（options 为 ["true","false"] 时生成开关）
+env_schema:
+  CT_GLASS:
+    name: 半透明效果
+    description: 打开后卡片半透明，透出 iOS 系统磨砂背景
+    options:
+      - "true"
+      - "false"
+  CT_SHOW_DIRECT:
+    name: 显示定向流量卡
+    description: 关闭后隐藏定向卡片，变为三卡模式；不设置则按是否有定向数据自动判断
+    options:
+      - "true"
+      - "false"
+  CT_SHOW_USED_FLOW:
+    name: 显示已用流量
+    description: 打开后流量卡显示已用而非剩余
+    options:
+      - "true"
+      - "false"
+  CT_TITLE:
+    name: 小组件标题
+    description: 显示的标题文字
+    default_value: "中国电信"
+
 # 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
 mitm:
   hostnames:
@@ -27,13 +52,5 @@ widgets:
   # 小组件在 iOS「编辑小组件」列表里显示为「中国电信」，通过 script_name 关联 generic 脚本
   - name: "中国电信"
     script_name: "china-telecom"
-    # 高级选项（一般不用动）：
+    # 高级选项（一般不用动），也可在模块设置页的开关/输入框里改：
     # env:
-    # 可选环境变量（在模块 Env 中添加，"true"/"false" 当开关用）：
-    #   CT_GLASS: "true"                # 开关1："true" 卡片半透明 glass 效果，默认实底色
-    #   CT_SHOW_DIRECT: "false"         # 开关2："false" 隐藏定向卡（3卡模式）；"true" 强制4卡；不填则自动判断
-    #   CT_SHOW_USED_FLOW: "false"      # 'true' 显示已用流量，否则显示剩余流量
-    #   CT_TITLE: "中国电信"             # 小组件标题
-    #   CT_WIDGET_STYLE: "glass"          # 旧写法，仍可用；推荐用 CT_GLASS 开关
-    #   CT_LOGIN_URL: ""                  # 手动指定登录地址（自动捕获失败时的备用）
-    #   CT_COOKIE: ""                     # 直接填写 cookie（备用）
