@@ -11,6 +11,8 @@
  *   CT_LOGIN_URL            电信登录地址（抓包得到的登录 URL，用于自动更新 cookie）
  *   CT_COOKIE               直接填写 cookie（与 CT_LOGIN_URL 二选一，URL 优先）
  *   CT_SHOW_USED_FLOW       'true' 显示已用流量，否则显示剩余流量
+ *   CT_GLASS                'true' 卡片半透明 glass 效果，默认实底色
+ *   CT_SHOW_DIRECT          'false' 隐藏定向卡（3卡模式）；'true' 强制4卡；不填则自动判断
  *   CT_TITLE                小组件标题，默认 "中国电信"
  *
  * 数据来源：https://e.dlife.cn/user/package_detail.do
@@ -189,7 +191,7 @@ function parseTelecom(detail, balance, opts) {
     unit: '元',
   };
 
-  return { fee, generalFlow, directFlow, voice, updatedAt: Date.now() };
+  return { fee, generalFlow, directFlow, voice, updatedAt: Date.now(), hasDirectFlow: (dirTotal + dirBalance + dirUsed) > 0 };
 }
 
 async function tryCookie(ctx, cookie, settings) {
@@ -306,6 +308,20 @@ function miniCard(icon, color, data) {
   };
 }
 
+// 开关1：CT_GLASS=true → 卡片半透明；兼容旧的 CT_WIDGET_STYLE=glass
+function isGlass(ctx) {
+  if (String(ctx?.env?.CT_GLASS || '').toLowerCase() === 'true') return true;
+  return String(ctx?.env?.CT_WIDGET_STYLE || '').toLowerCase() === 'glass';
+}
+
+// 开关2：CT_SHOW_DIRECT=false → 3卡模式（隐藏定向）；=true → 强制4卡；不填 → 有定向数据才显示
+function showDirectCard(ctx, ds) {
+  const v = String(ctx?.env?.CT_SHOW_DIRECT || '').toLowerCase();
+  if (v === 'false') return false;
+  if (v === 'true') return true;
+  return !!ds.hasDirectFlow;
+}
+
 function headerRow(title, ds, fromCache) {
   const t = ds && ds.updatedAt ? fmtTime(ds.updatedAt) : '--:--';
   return {
@@ -325,44 +341,45 @@ function headerRow(title, ds, fromCache) {
   };
 }
 
-function buildSmall(title, ds, fromCache) {
+function buildSmall(title, ds, fromCache, ctx) {
+  const cards3 = !showDirectCard(ctx, ds);
+  const row4 = (a, b) => ({
+    type: 'stack',
+    direction: 'row',
+    gap: 6,
+    children: [miniCard(a[0], a[1], a[2]), miniCard(b[0], b[1], b[2])],
+  });
+  const body = cards3
+    ? [
+        {
+          type: 'stack',
+          direction: 'row',
+          gap: 6,
+          children: [
+            miniCard(FEE_ICON, FEE_ICON_COLOR, ds.fee),
+            miniCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow),
+            miniCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice),
+          ],
+        },
+      ]
+    : [
+        row4([FEE_ICON, FEE_ICON_COLOR, ds.fee], [GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow]),
+        row4([DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow], [VOICE_ICON, VOICE_ICON_COLOR, ds.voice]),
+      ];
   return {
     type: 'widget',
     padding: 12,
     gap: 6,
     refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    children: [
-      headerRow(title, ds, fromCache),
-      {
-        type: 'stack',
-        direction: 'row',
-        gap: 6,
-        children: [
-          miniCard(FEE_ICON, FEE_ICON_COLOR, ds.fee),
-          miniCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow),
-        ],
-      },
-      {
-        type: 'stack',
-        direction: 'row',
-        gap: 6,
-        children: [
-          miniCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow),
-          miniCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice),
-        ],
-      },
-    ],
+    children: [headerRow(title, ds, fromCache), ...body],
   };
 }
 
 function buildMedium(title, ds, fromCache, ctx) {
-  // CT_WIDGET_STYLE=classic（默认）：卡片实底色
-  // CT_WIDGET_STYLE=glass：卡片半透明，透出 iOS 系统磨砂背景
-  const style = String((ctx && ctx.env && ctx.env.CT_WIDGET_STYLE) || 'classic').toLowerCase();
-  const cardBg =
-    style === 'classic'
-      ? { light: '#F2F2F7', dark: '#1C1C1E' }
-      : { light: 'rgba(255,255,255,0.18)', dark: 'rgba(255,255,255,0.08)' };
+  // CT_GLASS=true：卡片半透明，透出 iOS 系统磨砂背景（兼容旧的 CT_WIDGET_STYLE=glass）
+  const cardBg = isGlass(ctx)
+    ? { light: 'rgba(255,255,255,0.18)', dark: 'rgba(255,255,255,0.08)' }
+    : { light: '#F2F2F7', dark: '#1C1C1E' };
 
   return {
     type: 'widget',
@@ -378,7 +395,9 @@ function buildMedium(title, ds, fromCache, ctx) {
         children: [
           quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, cardBg),
           quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, cardBg),
-          quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, cardBg),
+          ...(showDirectCard(ctx, ds)
+            ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, cardBg)]
+            : []),
           quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, cardBg),
         ],
       },
@@ -513,7 +532,7 @@ async function handleWidget(ctx) {
   if (family.startsWith('accessory')) {
     return buildLockScreen(title, ds, family);
   }
-  return buildSmall(title, ds, fromCache);
+  return buildSmall(title, ds, fromCache, ctx);
 }
 
 /* ---------- 入口：单文件双模式 ---------- */
