@@ -452,7 +452,7 @@ async function handleWidget(ctx) {
   if (!configured) {
     return buildError(
       title,
-      '未登录：点我去登录，短信验证一次即可',
+      '未登录：在 Safari 打开 e.dlife.cn 登录一次',
       URLS.login
     );
   }
