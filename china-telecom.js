@@ -185,9 +185,10 @@ function parseTelecom(detail, balance, opts) {
   const directFlow = mkFlow('定向剩余', dirTotal, dirBalance, dirUsed);
   directFlow.color = DIRECT_ICON_COLOR;
 
+  const voiceUsed = Math.max(0, totalVoiceAmount - totalBalanceVoiceAmount);
   const voice = {
-    title: '语音剩余',
-    number: `${totalBalanceVoiceAmount}`,
+    title: showUsedFlow ? '语音已用' : '语音剩余',
+    number: `${showUsedFlow ? voiceUsed : totalBalanceVoiceAmount}`,
     unit: '分钟',
     percent: +(((totalBalanceVoiceAmount / (totalVoiceAmount || 1)) * 100).toFixed(2)),
     color: VOICE_ICON_COLOR,
@@ -222,7 +223,7 @@ async function loadData(ctx) {
   const loginUrl =
     (ctx.env.CT_LOGIN_URL || '').trim() || ctx.storage.get('ct_login_url') || '';
   const settings = {
-    showUsedFlow: ctx.env.CT_SHOW_USED_FLOW === 'true',
+    showUsedFlow: String(ctx.env.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true',
   };
   const storedCookie = ctx.storage.get('ct_cookie') || '';
   // 只要配了登录地址/cookie，或之前抓到过 cookie，就视为"已配置"
