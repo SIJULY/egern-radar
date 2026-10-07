@@ -263,7 +263,7 @@ const VOICE_ICON_COLOR = '#34C759';
 // 四卡统一：小图标 / 标题(含单位) / 大数值
 // 卡片统一：小图标 / 标题 / 大数值
 // fourCard=true（4 卡挤）时：标题不带单位，单位跟在数字后面，数字字号自动缩小
-function quadCard(icon, color, data, cardBg, fourCard) {
+function quadCard(icon, color, data, fourCard) {
   const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
   // 4 卡时话费取整（3 卡保留两位小数）
   let num = data.number;
@@ -277,9 +277,6 @@ function quadCard(icon, color, data, cardBg, fourCard) {
     direction: 'column',
     alignItems: 'center',
     flex: 1,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: cardBg,
     gap: 2,
     children: [
       { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color },
@@ -379,8 +376,7 @@ function buildSmall(title, ds, fromCache, ctx) {
 }
 
 function buildMedium(title, ds, fromCache, ctx) {
-  // 卡片半透明（无开关，默认开启）
-  const cardBg = { light: '#FFFFFF59', dark: '#FFFFFF26' };
+
 
   return {
     type: 'widget',
@@ -396,10 +392,10 @@ function buildMedium(title, ds, fromCache, ctx) {
         children: (() => {
           const four = showDirectCard(ctx, ds);
           return [
-            quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, cardBg, four),
-            quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, cardBg, four),
-            ...(four ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, cardBg, four)] : []),
-            quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, cardBg, four),
+            quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, four),
+            quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, four),
+            ...(four ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, four)] : []),
+            quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, four),
           ];
         })(),
       },
