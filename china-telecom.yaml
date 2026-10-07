@@ -2,30 +2,8 @@ name: "中国电信"
 description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新"
 author: "小秘书"
 
-# 模块设置页自动生成的 UI 控件（options 为 ["true","false"] 时生成开关）
-env_schema:
-  CT_GLASS:
-    name: 半透明效果
-    description: 打开后卡片半透明，透出 iOS 系统磨砂背景
-    options:
-      - "true"
-      - "false"
-  CT_SHOW_DIRECT:
-    name: 显示定向流量卡
-    description: 关闭后隐藏定向卡片，变为三卡模式；不设置则按是否有定向数据自动判断
-    options:
-      - "true"
-      - "false"
-  CT_SHOW_USED_FLOW:
-    name: 显示已用流量
-    description: 打开后流量卡显示已用而非剩余
-    options:
-      - "true"
-      - "false"
-  CT_TITLE:
-    name: 小组件标题
-    description: 显示的标题文字
-    default_value: "中国电信"
+# 注意：Egern 的 env_schema 开关 UI 和手动添加的环境变量在模块更新后会失效，
+# 因此半透明默认直接开启、三/四卡自动判断，均不依赖环境变量。
 
 # 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
 mitm:
@@ -52,7 +30,5 @@ widgets:
   # 小组件在 iOS「编辑小组件」列表里显示为「中国电信」，通过 script_name 关联 generic 脚本
   - name: "中国电信"
     script_name: "china-telecom"
-    env:
-      CT_GLASS: "true"
     # 高级选项（一般不用动），也可在模块设置页的开关/输入框里改：
     # env:

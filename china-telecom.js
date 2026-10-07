@@ -260,7 +260,7 @@ const DIRECT_ICON_COLOR = '#AF52DE';
 const VOICE_ICON = 'phone.circle.fill';
 const VOICE_ICON_COLOR = '#34C759';
 
-// 四卡统一：小图标 / 标题 / 大数值 / 单位
+// 四卡统一：小图标 / 标题(含单位) / 大数值
 function quadCard(icon, color, data, cardBg) {
   return {
     type: 'stack',
@@ -273,7 +273,7 @@ function quadCard(icon, color, data, cardBg) {
     gap: 2,
     children: [
       { type: 'image', src: `sf-symbol:${icon}`, width: 22, height: 22, color },
-      { type: 'text', text: data.title, font: { size: 'caption1' }, opacity: 0.75, maxLines: 1 },
+      { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption1' }, opacity: 0.75, maxLines: 1 },
       {
         type: 'text',
         text: String(data.number),
@@ -281,7 +281,6 @@ function quadCard(icon, color, data, cardBg) {
         maxLines: 1,
         minScale: 0.7,
       },
-      { type: 'text', text: data.unit, font: { size: 'caption2' }, opacity: 0.5 },
     ],
   };
 }
@@ -298,20 +297,23 @@ function miniCard(icon, color, data) {
       { type: 'image', src: `sf-symbol:${icon}`, width: 18, height: 18, color },
       {
         type: 'text',
-        text: `${data.number}${data.unit}`,
+        text: String(data.number),
         font: { size: 'footnote', weight: 'semibold' },
         maxLines: 1,
         minScale: 0.7,
       },
-      { type: 'text', text: data.title, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
+      { type: 'text', text: `${data.title}(${data.unit})`, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
     ],
   };
 }
 
-// 开关1：CT_GLASS=true → 卡片半透明；兼容旧的 CT_WIDGET_STYLE=glass
+// 半透明默认开启（Egern 模块 Env 不可靠，不依赖环境变量）；
+// 如需关闭，在模块 Env 手动添加 CT_GLASS=false（若 Egern 修好则生效）
 function isGlass(ctx) {
-  if (String(ctx?.env?.CT_GLASS || '').toLowerCase() === 'true') return true;
-  return String(ctx?.env?.CT_WIDGET_STYLE || '').toLowerCase() === 'glass';
+  const v = String(ctx?.env?.CT_GLASS || '').toLowerCase();
+  if (v === 'false') return false;
+  if (v === 'true') return true;
+  return true;
 }
 
 // 开关2：CT_SHOW_DIRECT=false → 3卡模式（隐藏定向）；=true → 强制4卡；不填 → 有定向数据才显示
