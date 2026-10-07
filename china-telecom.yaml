@@ -15,10 +15,11 @@ scriptings:
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 20
   # 登录捕获（http_request 类型，与小组件是同一个文件，脚本内部按 ctx.request 自动分支）
-  # Safari 里登录 e.dlife.cn 成功时自动捕获登录地址存入存储，小组件自动读取，全程无需手动操作
+  # Safari 里登录 e.dlife.cn 成功后，直接从登录后的真实请求里抓 Cookie 存入存储，
+  # 小组件优先用抓到的 Cookie，全程无需手动操作
   - http_request:
       name: "中国电信登录捕获"
-      match: '^https://e\.dlife\.cn/user/loginMiddle'
+      match: '^https://e\.dlife\.cn/'
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 10
 

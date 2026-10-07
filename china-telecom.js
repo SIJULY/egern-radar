@@ -164,6 +164,14 @@ function parseTelecom(detail, balance, opts) {
   return { fee, flow, voice, updatedAt: Date.now() };
 }
 
+async function tryCookie(ctx, cookie, settings) {
+  const detail = await fetchJson(ctx, URLS.detail, cookie);
+  const balance = await fetchJson(ctx, URLS.balance, cookie);
+  const ds = parseTelecom(detail, balance, settings);
+  ctx.storage.setJSON('ct_datasource', ds);
+  return ds;
+}
+
 async function loadData(ctx) {
   const envCookie = (ctx.env.CT_COOKIE || '').trim();
   const loginUrl =
@@ -173,29 +181,36 @@ async function loadData(ctx) {
     filterOrientateFlow: ctx.env.CT_FILTER_ORIENTATE_FLOW === 'true',
   };
   const storedCookie = ctx.storage.get('ct_cookie') || '';
-  // 只要配了登录地址/cookie，或之前存过 cookie，就视为"已配置"
+  // 只要配了登录地址/cookie，或之前抓到过 cookie，就视为"已配置"
   const configured = !!(envCookie || loginUrl || storedCookie);
 
-  let cookie = envCookie || storedCookie;
-  if (!envCookie && loginUrl) {
+  // 1) 优先用已捕获的 cookie（从登录后的真实请求里抓的，最可靠）
+  const firstCookie = envCookie || storedCookie;
+  if (firstCookie) {
     try {
-      cookie = await refreshCookie(ctx);
+      const ds = await tryCookie(ctx, firstCookie, settings);
+      return { configured, ds, fromCache: false };
     } catch (e) {
-      cookie = storedCookie; // 刷新失败时沿用旧 cookie
+      /* cookie 失效，掉到下一步 */
     }
   }
-  if (!cookie) return { configured, ds: null, fromCache: false };
 
-  try {
-    const detail = await fetchJson(ctx, URLS.detail, cookie);
-    const balance = await fetchJson(ctx, URLS.balance, cookie);
-    const ds = parseTelecom(detail, balance, settings);
-    ctx.storage.setJSON('ct_datasource', ds);
-    return { configured, ds, fromCache: false };
-  } catch (e) {
-    const cached = ctx.storage.getJSON('ct_datasource');
-    return { configured, ds: cached || null, fromCache: !!cached, error: String(e) };
+  // 2) 回放登录地址刷新 cookie（备用方式）
+  if (!envCookie && loginUrl) {
+    try {
+      const fresh = await refreshCookie(ctx);
+      if (fresh && fresh !== firstCookie) {
+        const ds = await tryCookie(ctx, fresh, settings);
+        return { configured, ds, fromCache: false };
+      }
+    } catch (e) {
+      /* 掉到缓存 */
+    }
   }
+
+  // 3) 断网/过期时用缓存顶一下
+  const cached = ctx.storage.getJSON('ct_datasource');
+  return { configured, ds: cached || null, fromCache: !!cached };
 }
 
 /* ---------- 渲染层（Widget DSL） ---------- */
@@ -432,23 +447,49 @@ function buildError(title, message, url) {
 // 在 Safari/浏览器里登录 e.dlife.cn 成功时，Egern 会经过 loginMiddle 请求，
 // 在此自动捕获登录地址存入存储，小组件下次运行自动读取，全程无需手动操作。
 // 不返回值 = 透传，不影响登录请求本身。
+/* 从请求头里取 Cookie，兼容 plain object / Headers 实例等形态，忽略大小写 */
+function getReqCookie(headers) {
+  if (!headers) return '';
+  if (typeof headers.get === 'function') {
+    return headers.get('cookie') || headers.get('Cookie') || '';
+  }
+  for (const k of Object.keys(headers)) {
+    if (String(k).toLowerCase() === 'cookie') return headers[k] || '';
+  }
+  return '';
+}
+
 async function handleCapture(ctx) {
-  const url = (ctx.request && ctx.request.url) || '';
-  if (!url.includes('e.dlife.cn/user/loginMiddle')) return;
+  const req = ctx.request || {};
+  const url = req.url || '';
+  if (!url.includes('e.dlife.cn')) return; // 非电信请求直接透传
 
-  const loginUrl = (url.match(/(http.+)&sign/) || [])[1] || url;
-  if (!loginUrl) return;
-  if (ctx.storage.get('ct_login_url') === loginUrl) return; // 已捕获过
+  // 1) 登录握手地址：记下来，并标记"刚刚登录过"（10 分钟内有效）
+  if (url.includes('/user/loginMiddle')) {
+    const loginUrl = (url.match(/(http.+)&sign/) || [])[1] || url;
+    if (loginUrl && ctx.storage.get('ct_login_url') !== loginUrl) {
+      ctx.storage.set('ct_login_url', loginUrl);
+    }
+    ctx.storage.set('ct_login_ts', String(Date.now()));
+    return;
+  }
 
-  ctx.storage.set('ct_login_url', loginUrl);
-  // 顺手把旧 cookie 清掉，避免新旧会话混用
-  ctx.storage.delete('ct_cookie');
-  ctx.notify({
-    title: '中国电信',
-    body: '登录成功，小组件将自动更新',
-    // 兜底：如果小组件没自动读到，点通知手动复制登录地址
-    action: { type: 'clipboard', text: loginUrl },
-  });
+  // 2) 主要方式：直接从登录后的真实请求里抓 Cookie，比回放握手地址可靠
+  const cookie = String(getReqCookie(req.headers) || '').trim();
+  if (!cookie || ctx.storage.get('ct_cookie') === cookie) return;
+  ctx.storage.set('ct_cookie', cookie);
+
+  // 只有"刚登录过"才打扰用户（成功信号）；后台静默续期不通知
+  const ts = Number(ctx.storage.get('ct_login_ts') || 0);
+  if (Date.now() - ts < 10 * 60 * 1000) {
+    ctx.storage.delete('ct_login_ts');
+    ctx.notify({
+      title: '中国电信',
+      body: '登录成功，小组件将自动更新',
+      // 兜底：如果小组件没自动读到，点通知手动复制 cookie
+      action: { type: 'clipboard', text: cookie },
+    });
+  }
 }
 
 /* ---------- 小组件（generic 脚本模式） ---------- */
