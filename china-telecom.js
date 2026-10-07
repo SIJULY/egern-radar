@@ -55,6 +55,10 @@ async function refreshCookie(ctx) {
     redirect: 'manual',
     timeout: 15000,
     credentials: 'omit',
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    },
   });
   const setCookies = (resp.headers && resp.headers.getAll('set-cookie')) || [];
   const pairs = setCookies
@@ -99,7 +103,12 @@ function harvestSetCookie(ctx, resp, cookie) {
 
 async function fetchJson(ctx, url, cookie) {
   const resp = await ctx.http.get(url, {
-    headers: { Cookie: cookie },
+    headers: {
+      Cookie: cookie,
+      // 伪装成 iOS Safari，避免服务端因 UA 不一致踢掉 session
+      'User-Agent':
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    },
     timeout: 15000,
     credentials: 'omit',
   });
