@@ -279,7 +279,7 @@ function quadCard(icon, color, data, fourCard) {
     flex: 1,
     gap: 2,
     children: [
-      { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color },
+      { type: 'image', src: `sf-symbol:${icon}`, width: 32, height: 32, color },
       { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
       {
         type: 'text',
