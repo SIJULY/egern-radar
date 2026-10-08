@@ -271,6 +271,9 @@ const VOICE_ICON = 'phone.circle.fill';
 const VOICE_ICON_COLOR = '#34C759';
 
 // 四卡统一：小图标 / 标题(含单位) / 大数值
+// 透明占位图（与进度条同尺寸，用于话费卡占位保证等宽）
+const TRANSPARENT_PX = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="42"></svg>');
+
 // 半圆进度条 SVG（data URI，整体 encodeURIComponent 编码）
 function progressArcSVG(percent, color) {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
@@ -316,10 +319,10 @@ function quadCard(icon, color, data, fourCard, isFee) {
     },
   ];
   if (isFee) {
-    // 占位：与进度条同宽，保证四张卡等宽
+    // 占位：与进度条同尺寸，保证四张卡等宽
     children.splice(1, 0, {
-      type: 'text',
-      text: '',
+      type: 'image',
+      src: TRANSPARENT_PX,
       width: 64,
       height: 42,
     });
