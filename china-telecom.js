@@ -299,7 +299,7 @@ function quadCard(icon, color, data, fourCard, isFee) {
   const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
   const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
   const numFont = { size: fourCard ? 'footnote' : 'title2', weight: 'bold' };
-  const titleRow = {
+  const titleInner = {
     type: 'stack',
     direction: 'row',
     alignItems: 'center',
@@ -309,6 +309,14 @@ function quadCard(icon, color, data, fourCard, isFee) {
       { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
     ],
   };
+  // 话费卡标题区固定 36px 高（与弧线同高），数字才能对齐
+  const titleRow = isFee ? {
+    type: 'stack',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    children: [titleInner],
+  } : titleInner;
   const numberEl = {
     type: 'text',
     text: numberText,
