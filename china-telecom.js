@@ -299,25 +299,25 @@ function quadCard(icon, color, data, fourCard, isFee) {
   const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
   const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
   const numFont = { size: fourCard ? 'footnote' : 'title2', weight: 'bold' };
-  const children = [
-    {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      gap: 4,
-      children: [
-        { type: 'image', src: `sf-symbol:${icon}`, width: 14, height: 14, color },
-        { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
-      ],
-    },
-    {
-      type: 'text',
-      text: numberText,
-      font: numFont,
-      maxLines: 1,
-      minScale: fourCard ? 0.9 : 0.7,
-    },
-  ];
+  const titleRow = {
+    type: 'stack',
+    direction: 'row',
+    alignItems: 'center',
+    gap: 4,
+    children: [
+      { type: 'image', src: `sf-symbol:${icon}`, width: 14, height: 14, color },
+      { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
+    ],
+  };
+  const numberEl = {
+    type: 'text',
+    text: numberText,
+    font: numFont,
+    maxLines: 1,
+    minScale: fourCard ? 0.9 : 0.7,
+  };
+  // 话费卡：标题在上；流量/语音卡：标题移到数字下方
+  const children = isFee ? [titleRow, numberEl] : [numberEl, titleRow];
   if (isFee) {
     children.push({
       type: 'text',
@@ -326,8 +326,8 @@ function quadCard(icon, color, data, fourCard, isFee) {
       opacity: 0.5,
     });
   } else {
-    // 流量/语音：半圆进度条（百分比显示在弧内）
-    children.splice(1, 0, {
+    // 流量/语音：半圆进度条（百分比显示在弧内），标题在数字下方
+    children.splice(0, 0, {
       type: 'image',
       src: progressArcSVG(data.percent, color),
       width: 56,
