@@ -336,6 +336,9 @@ function quadCard(icon, color, data, fourCard, isFee) {
     direction: 'column',
     alignItems: 'center',
     flex: 1,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: { light: '#F2F2F7', dark: '#1C1C1E' },
     gap: 2,
     children,
   };
