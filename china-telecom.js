@@ -327,8 +327,8 @@ function quadCard(icon, color, data, fourCard, isFee) {
     children.splice(1, 0, {
       type: 'image',
       src: progressArcSVG(data.percent, color),
-      width: 84,
-      height: 54,
+      width: 64,
+      height: 42,
     });
   }
   return {
@@ -437,7 +437,7 @@ function buildMedium(title, ds, fromCache, ctx) {
       {
         type: 'stack',
         direction: 'row',
-        gap: 8,
+        gap: 14,
         children: (() => {
           const four = showDirectCard(ctx, ds);
           return [
