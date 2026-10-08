@@ -319,19 +319,11 @@ function quadCard(icon, color, data, fourCard, isFee) {
     },
   ];
   if (isFee) {
-    // 中部 64x42 放"本月剩 X 天"，与进度条同尺寸，保证四张卡等宽
-    children.splice(1, 0, {
-      type: 'stack',
-      width: 56,
-      height: 36,
-      alignItems: 'center',
-      justifyContent: 'center',
-      children: [{
-        type: 'text',
-        text: `本月剩 ${daysLeftInMonth()} 天`,
-        font: { size: 'caption2' },
-        opacity: 0.5,
-      }],
+    children.push({
+      type: 'text',
+      text: `本月剩 ${daysLeftInMonth()} 天`,
+      font: { size: 'caption2' },
+      opacity: 0.5,
     });
   } else {
     // 流量/语音：半圆进度条（百分比显示在弧内）
@@ -347,9 +339,6 @@ function quadCard(icon, color, data, fourCard, isFee) {
     direction: 'column',
     alignItems: 'center',
     flex: 1,
-    padding: 8,
-    borderRadius: 14,
-    backgroundColor: { light: '#F2F2F7', dark: '#1C1C1E' },
     gap: 2,
     children,
   };
@@ -449,7 +438,6 @@ function buildMedium(title, ds, fromCache, ctx) {
         type: 'stack',
         direction: 'row',
         gap: 12,
-        padding: { top: 0, left: 20, right: 20, bottom: 0 },
         children: (() => {
           const four = showDirectCard(ctx, ds);
           return [
