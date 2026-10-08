@@ -271,19 +271,18 @@ const VOICE_ICON = 'phone.circle.fill';
 const VOICE_ICON_COLOR = '#34C759';
 
 // 四卡统一：小图标 / 标题(含单位) / 大数值
-// 半圆进度条 SVG（data URI，# 必须转义为 %23）
+// 半圆进度条 SVG（data URI，整体 encodeURIComponent 编码）
 function progressArcSVG(percent, color) {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
   const r = 38;
   const dash = (p / 100 * Math.PI * r).toFixed(1);
-  const c = String(color).replace('#', '%23');
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="84" height="54" viewBox="0 0 100 60">' +
-    '<path d="M12 52 A38 38 0 0 1 88 52" fill="none" stroke="%23888" stroke-opacity="0.25" stroke-width="9" stroke-linecap="round"/>' +
-    `<path d="M12 52 A38 38 0 0 1 88 52" fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${dash} 300"/>` +
-    `<text x="50" y="46" text-anchor="middle" font-size="15" font-weight="bold" fill="${c}">${Math.round(p)}%</text>` +
+    '<path d="M12 52 A38 38 0 0 1 88 52" fill="none" stroke="#888" stroke-opacity="0.25" stroke-width="12" stroke-linecap="round"/>' +
+    `<path d="M12 52 A38 38 0 0 1 88 52" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${dash} 300"/>` +
+    `<text x="50" y="46" text-anchor="middle" font-size="15" font-weight="bold" fill="${color}">${Math.round(p)}%</text>` +
     '</svg>';
-  return 'data:image/svg+xml;utf8,' + svg;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
 function daysLeftInMonth() {
