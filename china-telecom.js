@@ -316,6 +316,13 @@ function quadCard(icon, color, data, fourCard, isFee) {
     },
   ];
   if (isFee) {
+    // 占位：与进度条同宽，保证四张卡等宽
+    children.splice(1, 0, {
+      type: 'text',
+      text: '',
+      width: 64,
+      height: 42,
+    });
     children.push({
       type: 'text',
       text: `本月剩 ${daysLeftInMonth()} 天`,
@@ -407,12 +414,9 @@ function buildSmall(title, ds, fromCache, ctx) {
           type: 'stack',
           direction: 'row',
           gap: 6,
-          children: [
-            miniCard(FEE_ICON, FEE_ICON_COLOR, ds.fee),
-            miniCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow),
-            miniCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice),
-          ],
+          children: [miniCard(FEE_ICON, FEE_ICON_COLOR, ds.fee)],
         },
+        row4([GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow], [VOICE_ICON, VOICE_ICON_COLOR, ds.voice]),
       ]
     : [
         row4([FEE_ICON, FEE_ICON_COLOR, ds.fee], [GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow]),
