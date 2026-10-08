@@ -271,82 +271,30 @@ const VOICE_ICON = 'phone.circle.fill';
 const VOICE_ICON_COLOR = '#34C759';
 
 // 四卡统一：小图标 / 标题(含单位) / 大数值
-// 透明占位图（与进度条同尺寸，用于话费卡占位保证等宽）
-const TRANSPARENT_PX = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="42"></svg>');
-
-// 半圆进度条 SVG（data URI，整体 encodeURIComponent 编码）
-function progressArcSVG(percent, color) {
-  const p = Math.max(0, Math.min(100, Number(percent) || 0));
-  const r = 38;
-  const dash = (p / 100 * Math.PI * r).toFixed(1);
-  const svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="84" height="54" viewBox="0 0 100 60">' +
-    '<path d="M12 52 A38 38 0 0 1 88 52" fill="none" stroke="#888" stroke-opacity="0.25" stroke-width="12" stroke-linecap="round"/>' +
-    `<path d="M12 52 A38 38 0 0 1 88 52" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${dash} 300"/>` +
-    `<text x="50" y="46" text-anchor="middle" font-size="15" font-weight="bold" fill="${color}">${Math.round(p)}%</text>` +
-    '</svg>';
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-}
-
-function daysLeftInMonth() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate();
-}
-
 // 卡片统一：小图标 / 标题 / 大数值
 // fourCard=true（4 卡挤）时：标题不带单位，单位跟在数字后面，数字字号自动缩小
-function quadCard(icon, color, data, fourCard, isFee) {
+function quadCard(icon, color, data, fourCard) {
   const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
   const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
-  const numFont = { size: fourCard ? 'footnote' : 'title2', weight: 'bold' };
-  const titleInner = {
-    type: 'stack',
-    direction: 'row',
-    alignItems: 'center',
-    gap: 4,
-    children: [
-      { type: 'image', src: `sf-symbol:${icon}`, width: 14, height: 14, color },
-      { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
-    ],
-  };
-  const titleRow = titleInner;
-  const numberEl = {
-    type: 'text',
-    text: numberText,
-    font: numFont,
-    maxLines: 1,
-    minScale: fourCard ? 0.9 : 0.7,
-  };
-  // 统一结构：顶部36px视觉区 → 数字 → 标题
-  // 话费卡顶部放"本月剩X天"，流量/语音顶部放进度弧
-  const topVisual = isFee ? {
-    type: 'stack',
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    children: [{
-      type: 'text',
-      text: `本月剩 ${daysLeftInMonth()} 天`,
-      font: { size: 'caption2' },
-      opacity: 0.5,
-    }],
-  } : {
-    type: 'image',
-    src: progressArcSVG(data.percent, color),
-    width: 56,
-    height: 36,
-  };
-  const children = [topVisual, numberEl, titleRow];
   return {
     type: 'stack',
     direction: 'column',
     alignItems: 'center',
     flex: 1,
     gap: 2,
-    children,
+    children: [
+      { type: 'image', src: `sf-symbol:${icon}`, width: 32, height: 32, color },
+      { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
+      {
+        type: 'text',
+        text: numberText,
+        font: { size: fourCard ? 'footnote' : 'title2', weight: 'bold' },
+        maxLines: 1,
+        minScale: fourCard ? 0.9 : 0.7,
+      },
+    ],
   };
 }
-
 // 小尺寸 2x2 紧凑卡
 function miniCard(icon, color, data) {
   return {
@@ -444,7 +392,7 @@ function buildMedium(title, ds, fromCache, ctx) {
         children: (() => {
           const four = showDirectCard(ctx, ds);
           return [
-            quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, four, true),
+            quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, four),
             quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, four),
             ...(four ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, four)] : []),
             quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, four),
