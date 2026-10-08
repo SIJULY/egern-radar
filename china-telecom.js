@@ -309,14 +309,7 @@ function quadCard(icon, color, data, fourCard, isFee) {
       { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
     ],
   };
-  // 话费卡标题区固定 36px 高（与弧线同高），数字才能对齐
-  const titleRow = isFee ? {
-    type: 'stack',
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    children: [titleInner],
-  } : titleInner;
+  const titleRow = titleInner;
   const numberEl = {
     type: 'text',
     text: numberText,
@@ -324,24 +317,26 @@ function quadCard(icon, color, data, fourCard, isFee) {
     maxLines: 1,
     minScale: fourCard ? 0.9 : 0.7,
   };
-  // 话费卡：标题在上；流量/语音卡：标题移到数字下方
-  const children = isFee ? [titleRow, numberEl] : [numberEl, titleRow];
-  if (isFee) {
-    children.push({
+  // 统一结构：顶部36px视觉区 → 数字 → 标题
+  // 话费卡顶部放"本月剩X天"，流量/语音顶部放进度弧
+  const topVisual = isFee ? {
+    type: 'stack',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    children: [{
       type: 'text',
       text: `本月剩 ${daysLeftInMonth()} 天`,
       font: { size: 'caption2' },
       opacity: 0.5,
-    });
-  } else {
-    // 流量/语音：半圆进度条（百分比显示在弧内），标题在数字下方
-    children.splice(0, 0, {
-      type: 'image',
-      src: progressArcSVG(data.percent, color),
-      width: 56,
-      height: 36,
-    });
-  }
+    }],
+  } : {
+    type: 'image',
+    src: progressArcSVG(data.percent, color),
+    width: 56,
+    height: 36,
+  };
+  const children = [topVisual, numberEl, titleRow];
   return {
     type: 'stack',
     direction: 'column',
