@@ -448,7 +448,8 @@ function buildMedium(title, ds, fromCache, ctx) {
       {
         type: 'stack',
         direction: 'row',
-        gap: 14,
+        gap: 12,
+        padding: [0, 20, 0, 20],
         children: (() => {
           const four = showDirectCard(ctx, ds);
           return [
