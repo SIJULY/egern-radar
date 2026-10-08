@@ -319,18 +319,19 @@ function quadCard(icon, color, data, fourCard, isFee) {
     },
   ];
   if (isFee) {
-    // 占位：与进度条同尺寸，保证四张卡等宽
+    // 中部 64x42 放"本月剩 X 天"，与进度条同尺寸，保证四张卡等宽
     children.splice(1, 0, {
-      type: 'image',
-      src: TRANSPARENT_PX,
+      type: 'stack',
       width: 64,
       height: 42,
-    });
-    children.push({
-      type: 'text',
-      text: `本月剩 ${daysLeftInMonth()} 天`,
-      font: { size: 'caption2' },
-      opacity: 0.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      children: [{
+        type: 'text',
+        text: `本月剩 ${daysLeftInMonth()} 天`,
+        font: { size: 'caption2' },
+        opacity: 0.5,
+      }],
     });
   } else {
     // 流量/语音：半圆进度条（百分比显示在弧内）
