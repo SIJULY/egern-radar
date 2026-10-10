@@ -338,12 +338,23 @@ async function ctHttpPost(ctx, url, body) {
   const bodyStr = JSON.stringify(body);
   const headers = { 'Content-Type': 'application/json; charset=UTF-8' };
   const parse = async (resp) => {
-    if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}`);
+    if (!resp || resp.status !== 200) {
+      const e = new Error(`HTTP ${resp ? resp.status : 'no-response'}`);
+      e.httpStatus = resp ? resp.status : 0;
+      throw e;
+    }
     return resp.json();
   };
   const http = ctx.http || {};
   if (typeof http.post === 'function') {
-    return parse(await http.post(url, bodyStr, { headers, timeout: 15000 }));
+    // 约定1：post(url, body, headers) —— header 平铺（实测：包一层 options 会导致
+    // Content-Type 丢失，服务端回 415）
+    try {
+      return await parse(await http.post(url, bodyStr, headers));
+    } catch (e) {
+      // 约定2：post(url, body, {headers, timeout})
+      return parse(await http.post(url, bodyStr, { headers, timeout: 15000 }));
+    }
   }
   if (typeof http.request === 'function') {
     return parse(await http.request({ method: 'POST', url, body: bodyStr, headers, timeout: 15000 }));
