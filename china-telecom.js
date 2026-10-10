@@ -523,13 +523,23 @@ async function loadData(ctx) {
   const configured = !!(appApiConfigured || envCookie || loginUrl || storedCookie);
 
   // 0) App 官方 API（RSA 登录，可自动重登，最省心）
+  const notifyOnFail = (ctx.env.CT_NOTIFY_ON_FAIL || '').trim() === 'true';
   if (appApiConfigured) {
     try {
       const ds = await tryAppApi(ctx, settings);
+      const prevErr = ctx.storage.get('ct_app_error') || '';
       ctx.storage.set('ct_app_error', '');
+      if (notifyOnFail && prevErr) {
+        try { ctx.notify({ title: '中国电信', body: 'App 登录已恢复' }); } catch (e) {}
+      }
       return { configured, ds, fromCache: false };
     } catch (e) {
-      ctx.storage.set('ct_app_error', String((e && e.message) || e).slice(0, 80));
+      const msg = String((e && e.message) || e).slice(0, 80);
+      ctx.storage.set('ct_app_error', msg);
+      // 冷却期跳过不通知，避免每 2 小时骚扰
+      if (notifyOnFail && !msg.includes('冷却')) {
+        try { ctx.notify({ title: '中国电信 App 登录失败', body: msg }); } catch (e2) {}
+      }
       /* 掉到 cookie 兜底 */
     }
   }
