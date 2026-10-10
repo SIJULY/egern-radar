@@ -445,6 +445,7 @@ function ctAppDataToModel(apiData) {
 async function tryAppApi(ctx, settings) {
   const apiData = await ctAppFetchData(ctx);
   const ds = buildDs(ctAppDataToModel(apiData), settings);
+  ds.source = 'app';
   ctx.storage.setJSON('ct_datasource', ds);
   return ds;
 }
@@ -459,6 +460,7 @@ async function tryCookie(ctx, cookie, settings) {
     const cached = ctx.storage.getJSON('ct_datasource');
     if (cached?.fee?.number) ds.fee = cached.fee;
   }
+  ds.source = 'cookie';
   ctx.storage.setJSON('ct_datasource', ds);
   return ds;
 }
@@ -583,6 +585,8 @@ function showDirectCard(ctx, ds) {
 
 function headerRow(title, ds, fromCache) {
   const t = ds && ds.updatedAt ? fmtTime(ds.updatedAt) : '--:--';
+  const srcLabel = ds && ds.source === 'app' ? 'App' : ds && ds.source === 'cookie' ? 'Cookie' : '';
+  const suffix = srcLabel ? ` · ${srcLabel}` : '';
   return {
     type: 'stack',
     direction: 'row',
@@ -592,7 +596,7 @@ function headerRow(title, ds, fromCache) {
       { type: 'spacer' },
       {
         type: 'text',
-        text: fromCache ? `缓存 ${t}` : `更新 ${t}`,
+        text: fromCache ? `缓存 ${t}${suffix}` : `更新 ${t}${suffix}`,
         font: { size: 'caption2' },
         opacity: 0.55,
       },
