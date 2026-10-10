@@ -335,14 +335,23 @@ function ctBeijingTimestamp() {
 }
 
 async function ctHttpPost(ctx, url, body) {
-  const post = ctx.http && ctx.http.post;
-  if (typeof post !== 'function') throw new Error('当前 Egern 版本不支持 ctx.http.post，已回退');
-  const resp = await post.call(ctx.http, url, JSON.stringify(body), {
-    headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-    timeout: 15000,
-  });
-  if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: ${url}`);
-  return resp.json();
+  const bodyStr = JSON.stringify(body);
+  const headers = { 'Content-Type': 'application/json; charset=UTF-8' };
+  const parse = async (resp) => {
+    if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}`);
+    return resp.json();
+  };
+  const http = ctx.http || {};
+  if (typeof http.post === 'function') {
+    return parse(await http.post(url, bodyStr, { headers, timeout: 15000 }));
+  }
+  if (typeof http.request === 'function') {
+    return parse(await http.request({ method: 'POST', url, body: bodyStr, headers, timeout: 15000 }));
+  }
+  if (typeof fetch === 'function') {
+    return parse(await fetch(url, { method: 'POST', body: bodyStr, headers }));
+  }
+  throw new Error('Egern 不支持 POST 请求');
 }
 
 async function ctAppLogin(ctx) {
@@ -481,17 +490,21 @@ async function loadData(ctx) {
   if (appApiConfigured) {
     try {
       const ds = await tryAppApi(ctx, settings);
+      ctx.storage.set('ct_app_error', '');
       return { configured, ds, fromCache: false };
     } catch (e) {
+      ctx.storage.set('ct_app_error', String((e && e.message) || e).slice(0, 80));
       /* 掉到 cookie 兜底 */
     }
   }
+  const appError = appApiConfigured ? (ctx.storage.get('ct_app_error') || '') : '';
 
   // 1) 优先用已捕获的 cookie（从登录后的真实请求里抓的，最可靠）
   const firstCookie = envCookie || storedCookie;
   if (firstCookie) {
     try {
       const ds = await tryCookie(ctx, firstCookie, settings);
+      if (appError) ds.appError = appError;
       return { configured, ds, fromCache: false };
     } catch (e) {
       /* cookie 失效，掉到下一步 */
@@ -587,6 +600,7 @@ function headerRow(title, ds, fromCache) {
   const t = ds && ds.updatedAt ? fmtTime(ds.updatedAt) : '--:--';
   const srcLabel = ds && ds.source === 'app' ? 'App' : ds && ds.source === 'cookie' ? 'Cookie' : '';
   const suffix = srcLabel ? ` · ${srcLabel}` : '';
+  const appErr = ds && ds.appError ? `（App：${ds.appError}）` : '';
   return {
     type: 'stack',
     direction: 'row',
@@ -596,7 +610,7 @@ function headerRow(title, ds, fromCache) {
       { type: 'spacer' },
       {
         type: 'text',
-        text: fromCache ? `缓存 ${t}${suffix}` : `更新 ${t}${suffix}`,
+        text: fromCache ? `缓存 ${t}${suffix}${appErr}` : `更新 ${t}${suffix}${appErr}`,
         font: { size: 'caption2' },
         opacity: 0.55,
       },
