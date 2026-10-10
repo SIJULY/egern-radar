@@ -1,18 +1,9 @@
 name: "中国电信"
-description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；填手机号+服务密码走 App API 全自动（推荐），或在 Safari 打开 https://e.dlife.cn 短信登录一次走 cookie 捕获"
+description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，自动捕获 cookie"
 author: "小龙女她爸"
 
 # 模块设置页的开关（options 为 ["true","false"] 时生成开关 UI）
 env_schema:
-  CT_PHONE:
-    name: 手机号
-    description: 填写后走 App 官方 API 登录（需配合服务密码），无需 MITM 抓包，token 失效自动重登
-  CT_PASSWORD:
-    name: 服务密码
-    description: 电信服务密码（不是短信验证码），与手机号配合使用
-  CT_DEVICE_ID:
-    name: 设备 ID（可选）
-    description: 留空自动生成；在辅助网站短信登录授权过的设备 ID 更稳定
   CT_SHOW_DIRECT:
     name: 显示定向流量卡
     description: 关闭后隐藏定向卡片变为三卡；不设置则按是否有定向数据自动判断
@@ -22,12 +13,6 @@ env_schema:
   CT_SHOW_USED_FLOW:
     name: 显示已用流量
     description: 打开后流量卡显示已用而非剩余
-    options:
-      - "true"
-      - "false"
-  CT_NOTIFY_ON_FAIL:
-    name: 登录失败推送通知
-    description: 打开后 App 登录失败时推送通知提醒
     options:
       - "true"
       - "false"
