@@ -411,7 +411,9 @@ async function ctAppLogin(ctx) {
   };
   const data = await ctHttpPost(ctx, 'https://appgologin.189.cn:9031/login/client/userLoginNormal', loginBody);
   if (data?.responseData?.resultCode !== '0000') {
-    throw new Error(data?.responseData?.resultDesc || 'App 登录失败');
+    const rd = data?.responseData;
+    const detail = rd ? `code=${rd.resultCode} desc=${rd.resultDesc || '(空)'}` : `raw=${JSON.stringify(data).slice(0, 90)}`;
+    throw new Error(`App 登录失败(${detail})`.slice(0, 90));
   }
   const rs = data.responseData.data.loginSuccessResult || {};
   if (!rs.token) throw new Error('App 登录未返回 token');
