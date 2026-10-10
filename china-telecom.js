@@ -412,11 +412,15 @@ async function ctAppLogin(ctx) {
   const data = await ctHttpPost(ctx, 'https://appgologin.189.cn:9031/login/client/userLoginNormal', loginBody);
   if (data?.responseData?.resultCode !== '0000') {
     const rd = data?.responseData;
+    if ((rd?.resultDesc || '').includes('频繁')) {
+      ctx.storage.set('ct_app_ratelimited_at', String(Date.now()));
+    }
     const detail = rd ? `code=${rd.resultCode} desc=${rd.resultDesc || '(空)'}` : `raw=${JSON.stringify(data).slice(0, 90)}`;
     throw new Error(`App 登录失败(${detail})`.slice(0, 90));
   }
   const rs = data.responseData.data.loginSuccessResult || {};
   if (!rs.token) throw new Error('App 登录未返回 token');
+  ctx.storage.delete('ct_app_ratelimited_at');
   ctx.storage.set('ct_app_token', rs.token);
   ctx.storage.set('ct_app_city', rs.cityCode || '');
   ctx.storage.set('ct_app_province', rs.provinceCode || '');
@@ -424,6 +428,11 @@ async function ctAppLogin(ctx) {
 }
 
 async function ctAppFetchData(ctx) {
+  // 限流冷却：30 分钟内被限流过则直接跳过 App，避免越试封越久
+  const limitedAt = parseInt(ctx.storage.get('ct_app_ratelimited_at') || '0', 10);
+  if (limitedAt && Date.now() - limitedAt < 30 * 60 * 1000) {
+    throw new Error('App 登录限流冷却中');
+  }
   const phone = (ctx.env.CT_PHONE || '').trim();
   const doQuery = async (token) => {
     const ts = ctBeijingTimestamp();
