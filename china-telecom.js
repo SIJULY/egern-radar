@@ -352,10 +352,11 @@ async function ctHttpPost(ctx, url, body) {
   };
   const http = ctx.http || {};
   if (typeof http.post === 'function') {
-    // Egern 的 post 参数约定不明，逐个试：A 平铺 headers / C 单对象 / B 嵌套 options
+    // 官方文档：post(url, options)，options = {headers, body, timeout}
+    // C 为标准写法放首位；A/B 为旧版兼容 fallback
     const attempts = [
+      () => http.post(url, { body: bodyStr, headers, timeout: 15000 }),
       () => http.post(url, bodyStr, headers),
-      () => http.post(url, { body: bodyStr, headers }),
       () => http.post(url, bodyStr, { headers, timeout: 15000 }),
     ];
     let lastErr = null;
