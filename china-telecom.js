@@ -339,7 +339,12 @@ async function ctHttpPost(ctx, url, body) {
   const headers = { 'Content-Type': 'application/json; charset=UTF-8' };
   const parse = async (resp) => {
     if (!resp || resp.status !== 200) {
-      const e = new Error(`HTTP ${resp ? resp.status : 'no-response'}`);
+      let snippet = '';
+      try {
+        const t = await resp.text();
+        snippet = String(t).replace(/\s+/g, ' ').slice(0, 120);
+      } catch (e) {}
+      const e = new Error(`HTTP ${resp ? resp.status : 'no-response'}${snippet ? ' ' + snippet : ''}`);
       e.httpStatus = resp ? resp.status : 0;
       throw e;
     }
@@ -347,14 +352,22 @@ async function ctHttpPost(ctx, url, body) {
   };
   const http = ctx.http || {};
   if (typeof http.post === 'function') {
-    // 约定1：post(url, body, headers) —— header 平铺（实测：包一层 options 会导致
-    // Content-Type 丢失，服务端回 415）
-    try {
-      return await parse(await http.post(url, bodyStr, headers));
-    } catch (e) {
-      // 约定2：post(url, body, {headers, timeout})
-      return parse(await http.post(url, bodyStr, { headers, timeout: 15000 }));
+    // Egern 的 post 参数约定不明，逐个试：A 平铺 headers / C 单对象 / B 嵌套 options
+    const attempts = [
+      () => http.post(url, bodyStr, headers),
+      () => http.post(url, { body: bodyStr, headers }),
+      () => http.post(url, bodyStr, { headers, timeout: 15000 }),
+    ];
+    let lastErr = null;
+    for (const fn of attempts) {
+      try {
+        return await parse(await fn());
+      } catch (e) {
+        lastErr = e;
+        if (!e.httpStatus || e.httpStatus !== 415) break; // 非 415 说明约定对了，是别的问题
+      }
     }
+    throw lastErr;
   }
   if (typeof http.request === 'function') {
     return parse(await http.request({ method: 'POST', url, body: bodyStr, headers, timeout: 15000 }));
