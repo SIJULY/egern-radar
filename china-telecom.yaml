@@ -16,6 +16,12 @@ env_schema:
     options:
       - "true"
       - "false"
+  CT_KEEPALIVE:
+    name: 定时保活
+    description: 配合 Egern 定时任务定期拉接口续 session，防 cookie 过期；设为 false 可关闭
+    options:
+      - "true"
+      - "false"
 
 # 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
 mitm:
