@@ -18,7 +18,7 @@ env_schema:
       - "false"
   CT_KEEPALIVE:
     name: 定时保活
-    description: 配合 Egern 定时任务定期拉接口续 session，防 cookie 过期；设为 false 可关闭
+    description: 模块自带每 4 小时保活任务，定期拉接口续 session 防 cookie 过期；设为 false 可关闭
     options:
       - "true"
       - "false"
@@ -43,6 +43,13 @@ scriptings:
       match: '^https://e\.dlife\.cn/'
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 10
+  # 定时保活（schedule 类型，同一个文件；无 widgetFamily 时脚本只拉接口续 session 不渲染）
+  # 每 4 小时跑一次，配合滑动续期让登录态一直有效；CT_KEEPALIVE=false 可关闭
+  - schedule:
+      name: "中国电信保活"
+      cron: "0 */4 * * *"
+      script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
+      timeout: 20
 
 widgets:
   # 小组件在 iOS「编辑小组件」列表里显示为「中国电信」，通过 script_name 关联 generic 脚本
