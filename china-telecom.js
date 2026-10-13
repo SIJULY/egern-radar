@@ -589,15 +589,36 @@ export default async function (ctx) {
   if (ctx.request && ctx.request.url) {
     return handleCapture(ctx);
   }
-  // schedule 定时保活 → 只拉接口续 session，不渲染小组件
-  // 配合 harvestSetCookie 的滑动续期，定期跑一次就能让登录态一直有效
-  if (!ctx.widgetFamily) {
+  // schedule 定时保活 → 轻量 ping 一次续 session，不渲染小组件
+  // 只发一个请求：完整 loadData 最坏要串行发多个请求，容易超过定时任务超时；
+  // 保活只需要一次真实触达，利用服务端 session 滑动过期机制续命
+  if (ctx.cron || !ctx.widgetFamily) {
     const keep = String(ctx.env?.CT_KEEPALIVE || '').toLowerCase();
     if (keep === 'false' || keep === '0') return { type: 'text', text: 'keepalive disabled' };
-    try {
-      await loadData(ctx);
-    } catch (_) {}
+    await ctKeepAlive(ctx);
     return { type: 'text', text: 'keepalive done' };
   }
   return handleWidget(ctx);
+}
+
+// 定时保活：轻量 ping 一次续 session，成功/失败都不通知不写缓存
+async function ctKeepAlive(ctx) {
+  const cookie =
+    (ctx.env.CT_COOKIE || '').trim() ||
+    ctx.storage.get('ct_cookie') ||
+    '';
+  if (!cookie) return;
+  try {
+    const resp = await ctx.http.get(URLS.detail, {
+      headers: {
+        'Cookie': cookie,
+        'User-Agent':
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      },
+      timeout: 10000,
+      credentials: 'omit',
+    });
+    // 滑动续期：保活响应若带 Set-Cookie 也合并进存储
+    harvestSetCookie(ctx, resp, cookie);
+  } catch (e) {}
 }
