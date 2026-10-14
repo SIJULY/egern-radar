@@ -853,7 +853,7 @@ function cdtAppDataToDs(apiData, settings) {
 async function tryAppApi(ctx, settings) {
   const phone = (ctx.env.CT_APP_PHONE || '').trim();
   const passwd = ctx.env.CT_APP_PASSWORD || '';
-  const androidId = (ctx.env.CT_APP_ANDROID_ID || '').trim();
+  const androidId = (ctx.env.CT_APP_ANDROID_ID || '').trim() || (ctx.storage.get('ct_app_android_id') || '').trim();
   // 先试缓存 token
   let token = ctx.storage.get('ct_app_token') || '';
   let apiData = null;
@@ -908,7 +908,8 @@ async function loadData(ctx) {
     showUsedFlow: String(ctx.env.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true',
   };
   // 0) App 登录链优先（配了手机号+密码+AndroidID 才走）
-  const appConfigured = !!((ctx.env.CT_APP_PHONE || '').trim() && ctx.env.CT_APP_PASSWORD && (ctx.env.CT_APP_ANDROID_ID || '').trim());
+  const appAndroidId = (ctx.env.CT_APP_ANDROID_ID || '').trim() || (ctx.storage.get('ct_app_android_id') || '').trim();
+  const appConfigured = !!((ctx.env.CT_APP_PHONE || '').trim() && ctx.env.CT_APP_PASSWORD && appAndroidId);
   if (appConfigured) {
     try {
       const ds = await tryAppApi(ctx, settings);
