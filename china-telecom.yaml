@@ -1,9 +1,18 @@
 name: "中国电信"
-description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，自动捕获 cookie"
+description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；填 App 账号走三步登录链（优先），或 Safari 登录 e.dlife.cn 走 cookie 捕获兜底"
 author: "小龙女她爸"
 
 # 模块设置页的开关（options 为 ["true","false"] 时生成开关 UI）
 env_schema:
+  CT_APP_PHONE:
+    name: App 手机号
+    description: 11 位电信手机号，配密码+AndroidID 后走 App 登录链（优先）
+  CT_APP_PASSWORD:
+    name: App 服务密码
+    description: 电信服务密码（非短信验证码）
+  CT_APP_ANDROID_ID:
+    name: App AndroidID
+    description: 16 位十六进制设备 ID，从辅助网站短信登录获取
   CT_SHOW_DIRECT:
     name: 显示定向流量卡
     description: 关闭后隐藏定向卡片变为三卡；不设置则按是否有定向数据自动判断
