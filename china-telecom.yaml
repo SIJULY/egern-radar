@@ -12,10 +12,7 @@ env_schema:
     description: 电信服务密码（非短信验证码）
   CT_APP_ANDROID_ID:
     name: App AndroidID
-    description: 16 位十六进制设备 ID（手动填，或用短信脚本自动获取后存本机）
-  CT_APP_SMS_CODE:
-    name: 短信验证码
-    description: 填手机号后手动运行"ct-send-sms"发码，收到短信填这里，再运行"ct-verify-sms"
+    description: 16 位十六进制设备 ID，从 https://telecom.nufe.ccwu.cc 短信登录获取
   CT_SHOW_DIRECT:
     name: 显示定向流量卡
     description: 关闭后隐藏定向卡片变为三卡；不设置则按是否有定向数据自动判断
@@ -47,16 +44,6 @@ scriptings:
       name: "china-telecom"
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 20
-  # 短信验证码：发送
-  - generic:
-      name: "ct-send-sms"
-      script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/ct-send-sms.js"
-      timeout: 30
-  # 短信验证码：验证并获取 AndroidID
-  - generic:
-      name: "ct-verify-sms"
-      script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/ct-verify-sms.js"
-      timeout: 30
   # 登录捕获（http_request 类型，与小组件是同一个文件，脚本内部按 ctx.request 自动分支）
   # Safari 里登录 e.dlife.cn 成功后，直接从登录后的真实请求里抓 Cookie 存入存储，
   # 小组件优先用抓到的 Cookie，全程无需手动操作
