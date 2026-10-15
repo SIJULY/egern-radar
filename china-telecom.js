@@ -1078,7 +1078,7 @@ function buildSmall(title, ds, fromCache, ctx, cookieDead) {
     type: 'widget',
     padding: 12,
     gap: 6,
-    refreshAfter: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    refreshAfter: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
     children: [headerRow(title, ds, fromCache, cookieDead), ...body],
   };
 }
@@ -1090,7 +1090,7 @@ function buildMedium(title, ds, fromCache, ctx, cookieDead) {
     type: 'widget',
     padding: 12,
     gap: 8,
-    refreshAfter: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    refreshAfter: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
     children: [
       headerRow(title, ds, fromCache, cookieDead),
       {
