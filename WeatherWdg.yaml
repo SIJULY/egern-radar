@@ -3,13 +3,13 @@ description: 中国天气网 实况7天预报/生活指数，无需 Key
 author: 小龙女她爸
 icon: https://raw.githubusercontent.com/SIJULY/egern-radar/main/weather-icon.png
 compat_arguments:
-  weatherCity: ''
+  weatherCity: '合肥'
   weatherUserName: ''
 compat_arguments_schema:
   weatherCity:
     name: 城市
-    description: 要查询的城市，例如 海口、北京、合肥；留空或填"自动"则按 IP 自动定位
-    default_value: ''
+    description: 要查询的城市，例如 合肥、北京、海口，支持全国地级市及区县中文名
+    default_value: '合肥'
   weatherUserName:
     name: 名字
     description: 大尺寸问候语显示的名字，可不填
