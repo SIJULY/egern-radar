@@ -3785,40 +3785,37 @@ function renderMedium(m) {
   const { icon, color: iconColor } = iconFromText(m.weather);
   const today = m.daily && m.daily[0];
 
-  // 顶部：定位图标+城市（自动定位才显示图标） | 观测时间
-  const headerLeft = {
-    type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
-    children: [
-      ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 16, height: 16, color: BLUE }] : []),
-      { type: 'text', text: m.city, font: { size: 20, weight: 'semibold' }, textColor: BLUE, maxLines: 1 },
-    ],
-  };
   const header = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
-      headerLeft,
+      {
+        type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+        children: [
+          ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 14, height: 14, color: BLUE }] : []),
+          { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: BLUE, maxLines: 1 },
+        ],
+      },
       { type: 'spacer' },
-      { type: 'text', text: m.time ? `观测 ${m.time.slice(0, 5)}` : '', font: { size: 14 }, textColor: S, maxLines: 1 },
+      { type: 'text', text: m.time ? `观测 ${m.time.slice(0, 5)}` : '', font: { size: 12 }, textColor: S, maxLines: 1 },
     ],
   };
 
-  // 大温度 + 天气图标 | 天气状况 + 高低
   const tempRow = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
-      { type: 'text', text: `${m.temp || '--'}°`, font: { size: 64, weight: 'bold' }, textColor: T, maxLines: 1 },
-      { type: 'spacer', length: 12 },
-      { type: 'image', src: icon, width: 56, height: 56, color: iconColor },
+      { type: 'text', text: `${m.temp || '--'}°`, font: { size: 48, weight: 'bold' }, textColor: T, maxLines: 1 },
+      { type: 'spacer', length: 8 },
+      { type: 'image', src: icon, width: 44, height: 44, color: iconColor },
       { type: 'spacer' },
       {
-        type: 'stack', direction: 'column', alignItems: 'end', gap: 2,
+        type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
         children: [
-          { type: 'text', text: m.weather || '', font: { size: 22, weight: 'medium' }, textColor: T, maxLines: 1 },
+          { type: 'text', text: m.weather || '', font: { size: 18, weight: 'medium' }, textColor: T, maxLines: 1 },
           {
-            type: 'stack', direction: 'row', gap: 8,
+            type: 'stack', direction: 'row', gap: 6,
             children: [
-              { type: 'text', text: today ? `高 ${today.tempMax}°` : '', font: { size: 16 }, textColor: '#FF6B35', maxLines: 1 },
-              { type: 'text', text: today ? `低 ${today.tempMin}°` : '', font: { size: 16 }, textColor: '#4A90D9', maxLines: 1 },
+              { type: 'text', text: today ? `高 ${today.tempMax}°` : '', font: { size: 14 }, textColor: '#FF6B35', maxLines: 1 },
+              { type: 'text', text: today ? `低 ${today.tempMin}°` : '', font: { size: 14 }, textColor: '#4A90D9', maxLines: 1 },
             ],
           },
         ],
@@ -3826,79 +3823,73 @@ function renderMedium(m) {
     ],
   };
 
-  // 中间三列详情
-  const feelsLike = m.temp && m.humidity ? '' : '';
-  const detailCell = (iconSym, iconC, label, value) => ({
-    type: 'stack', direction: 'row', alignItems: 'center', gap: 4, flex: 1,
+  const cell = (sym, c, txt) => ({
+    type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
     children: [
-      { type: 'image', src: iconSym, width: 18, height: 18, color: iconC },
-      { type: 'text', text: `${label} ${value}`, font: { size: 14 }, textColor: T, maxLines: 1 },
+      { type: 'image', src: sym, width: 15, height: 15, color: c },
+      { type: 'text', text: txt, font: { size: 12 }, textColor: T, maxLines: 1 },
     ],
   });
-  // 湿度条
   const humidity = Math.max(0, Math.min(100, parseInt(String(m.humidity).replace('%', ''), 10) || 0));
-  const humBarW = 120, humBarH = 8;
-  const humFill = Math.round(humBarW * humidity / 100);
-  const humSvg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${humBarW} ${humBarH}'><rect x='0' y='0' width='${humBarW}' height='${humBarH}' rx='4' fill='%23E5E5EA'/><rect x='0' y='0' width='${humFill}' height='${humBarH}' rx='4' fill='%2334C759'/></svg>`;
-  const humidityCell = {
-    type: 'stack', direction: 'row', alignItems: 'center', gap: 4, flex: 1,
-    children: [
-      { type: 'image', src: 'sf-symbol:drop.fill', width: 18, height: 18, color: '#34C759' },
-      { type: 'text', text: `湿度 ${humidity}%`, font: { size: 14 }, textColor: T, maxLines: 1 },
-      { type: 'image', src: `data:image/svg+xml,${humSvg}`, width: humBarW, height: humBarH },
-    ],
-  };
 
   const row1 = {
-    type: 'stack', direction: 'row', alignItems: 'center', gap: 8,
+    type: 'stack', direction: 'row', alignItems: 'center',
     children: [
-      detailCell('sf-symbol:thermometer', '#FF9500', '体感', `${m.temp || '--'}°`),
-      detailCell('sf-symbol:wind', '#5AC8FA', m.windDir || '风', m.windScale || ''),
-      detailCell('sf-symbol:aqi.medium', '#34C759', 'AQI', m.aqi || '--'),
+      cell('sf-symbol:thermometer', '#FF9500', `体感 ${m.temp || '--'}°`),
+      { type: 'spacer' },
+      cell('sf-symbol:wind', '#5AC8FA', `${m.windDir || ''}${m.windScale || ''}`.trim() || '风'),
+      { type: 'spacer' },
+      cell('sf-symbol:aqi.medium', '#34C759', `AQI ${m.aqi || '--'}`),
     ],
   };
   const row2 = {
-    type: 'stack', direction: 'row', alignItems: 'center', gap: 8,
+    type: 'stack', direction: 'row', alignItems: 'center',
     children: [
-      detailCell('sf-symbol:eye.fill', '#AF52DE', '能见度', m.vis ? `${m.vis}` : '--'),
-      detailCell('sf-symbol:cloud.rain.fill', '#4A90D9', '降水', `${m.rain || '0'}mm`),
-      humidityCell,
+      cell('sf-symbol:eye.fill', '#AF52DE', `能见度 ${m.vis || '--'}`),
+      { type: 'spacer' },
+      cell('sf-symbol:cloud.rain.fill', '#4A90D9', `降水 ${m.rain || '0'}mm`),
+      { type: 'spacer' },
+      cell('sf-symbol:drop.fill', '#34C759', `湿度 ${humidity}%`),
     ],
   };
 
-  // 底部 5 天预报
-  const forecastCells = [];
-  const dayLabels = ['明天'];
-  for (let i = 1; i <= 5 && m.daily && m.daily[i]; i++) {
+  const fc = [];
+  for (let i = 1; i <= 4 && m.daily && m.daily[i]; i++) {
     const d = m.daily[i];
-    const { icon: dic, color: dcolor } = iconFromCode(d.codeDay);
-    forecastCells.push({
-      type: 'stack', direction: 'column', alignItems: 'center', gap: 3, flex: 1,
+    const { icon: dic, color: dc } = iconFromCode(d.codeDay);
+    const label = i === 1 ? '明天' : d.week;
+    fc.push({
+      type: 'stack', direction: 'column', alignItems: 'center', gap: 2,
       children: [
-        { type: 'text', text: dayLabels[i - 1] || d.week, font: { size: 14 }, textColor: '#4A90D9', maxLines: 1 },
-        { type: 'image', src: dic, width: 32, height: 32, color: dcolor },
-        { type: 'text', text: `${d.tempMax}°`, font: { size: 15, weight: 'semibold' }, textColor: '#FF6B35', maxLines: 1 },
-        { type: 'text', text: `${d.tempMin}°`, font: { size: 15 }, textColor: '#4A90D9', maxLines: 1 },
+        { type: 'text', text: label, font: { size: 12 }, textColor: '#4A90D9', maxLines: 1 },
+        { type: 'image', src: dic, width: 26, height: 26, color: dc },
+        {
+          type: 'stack', direction: 'row', gap: 4,
+          children: [
+            { type: 'text', text: `${d.tempMax}°`, font: { size: 12, weight: 'semibold' }, textColor: '#FF6B35', maxLines: 1 },
+            { type: 'text', text: `${d.tempMin}°`, font: { size: 12 }, textColor: '#4A90D9', maxLines: 1 },
+          ],
+        },
       ],
     });
+    if (i < 4) fc.push({ type: 'spacer' });
   }
 
   return {
     type: 'widget',
-    padding: 14,
-    gap: 8,
+    padding: 12,
     backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
     refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     children: [
       header,
+      { type: 'spacer', length: 2 },
       tempRow,
-      row1,
-      row2,
       { type: 'spacer', length: 4 },
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', flex: 1,
-        children: forecastCells.length > 0 ? forecastCells : [{ type: 'spacer' }],
-      },
+      row1,
+      { type: 'spacer', length: 2 },
+      row2,
+      { type: 'spacer' },
+      { type: 'stack', direction: 'row', alignItems: 'center', children: fc },
     ],
   };
 }
