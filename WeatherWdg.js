@@ -1,5 +1,5 @@
 /**
- * 天气·晴雨 (Egern 小组件版)
+ * 和风天气·晴雨 (Egern 小组件版)
  * 数据来源：中国天气网 (weather.com.cn) 免 Key 方案（源自 WeatherWdg.js / WeatherWdg.yaml）
  * 环境变量：
  *   QWEATHER_LOCATION / CITY / LOCATION: 城市名（如 合肥、北京、阳江）、9 位城市代码，或填 "自动"（默认按 IP 自动定位）
@@ -4238,6 +4238,7 @@ function addHumidity(parent, data, width = 64) {
     weight: 'medium',
     color: COLORS.blue(),
     monospaced: true,
+    minScale: 0.75,
   })
   row.addSpacer()
   addProgressBar(row, width, 4, humidity != null ? humidity / 100 : 0, COLORS.track(), COLORS.blue())
@@ -4399,14 +4400,14 @@ function addHumidityDetail(parent, data) {
   row.centerAlignContent()
   addSymbol(row, 'drop.fill', 8, COLORS.teal())
   row.addSpacer(3)
-  addText(row, humidity == null ? '湿度—' : `湿度${Math.round(humidity)}%`, {
+  addText(row, humidity == null ? '湿度 —' : `湿度 ${Math.round(humidity)}%`, {
     size: 8.3,
     weight: 'medium',
     color: COLORS.teal(),
-    monospaced: true,
+    minScale: 0.75,
   })
   row.addSpacer(3)
-  addProgressBar(row, 25, 3, humidity != null ? humidity / 100 : 0, COLORS.tealTrack(), COLORS.teal())
+  addProgressBar(row, 18, 3, humidity != null ? humidity / 100 : 0, COLORS.tealTrack(), COLORS.teal())
 }
 
 function addMediumDetails(parent, data) {
@@ -4662,7 +4663,7 @@ function createErrorWidget(errMsg) {
   const w = createContainer(true)
   w.layoutVertically()
   w.setPadding(16, 16, 16, 16)
-  addText(w, '天气·晴雨', { size: 12, weight: 'semibold', color: COLORS.blue() })
+  addText(w, '和风天气·晴雨', { size: 12, weight: 'semibold', color: COLORS.blue() })
   w.addSpacer(6)
   addText(w, '天气暂不可用', { size: 18, weight: 'bold', color: COLORS.ink() })
   w.addSpacer(6)
