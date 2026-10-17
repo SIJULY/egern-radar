@@ -558,11 +558,11 @@ const CITY_PRESETS = {
 async function getCityByIP(ctx) {
   // IP 定位到城市（免费接口，无需 Key）
   try {
-    const resp = await ctx.http.get('http://ip-api.com/json/?lang=zh-CN', { timeout: 8000 });
+    const resp = await ctx.http.get('https://ipapi.co/json/', { timeout: 8000 });
     const text = await resp.text();
     const j = JSON.parse(text);
-    if (j && j.status === 'success' && j.city) {
-      return j.city.replace(/市$/, '');
+    if (j && j.city) {
+      return String(j.city).replace(/市$/, '');
     }
   } catch (_) {}
   return '';
