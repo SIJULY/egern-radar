@@ -9,7 +9,11 @@ export default async function (ctx) {
   const env = safeCtx.env || {};
   const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
 
-  const cityName = (env.CITY || '海口').trim() || '海口';
+  let cityName = (env.CITY || '').trim();
+  if (!cityName || cityName === '自动') {
+    const ipCity = await getCityByIP(safeCtx);
+    cityName = ipCity || '海口';
+  }
   const userName = (env.USER_NAME || '').trim();
 
   try {
@@ -550,6 +554,19 @@ const CITY_PRESETS = {
   '桃园': '101340102', '新竹': '101340103', '宜兰': '101340104', '嘉义': '101340202', '台南': '101340203', '台东': '101340204',
   '屏东': '101340205', '苗栗': '101340402', '彰化': '101340403', '南投': '101340404', '花莲': '101340405', '云林': '101340406',
 };
+
+async function getCityByIP(ctx) {
+  // IP 定位到城市（免费接口，无需 Key）
+  try {
+    const resp = await ctx.http.get('http://ip-api.com/json/?lang=zh-CN', { timeout: 8000 });
+    const text = await resp.text();
+    const j = JSON.parse(text);
+    if (j && j.status === 'success' && j.city) {
+      return j.city.replace(/市$/, '');
+    }
+  } catch (_) {}
+  return '';
+}
 
 async function getCityCode(ctx, cityName) {
   if (/^\d{9}$/.test(cityName)) {
