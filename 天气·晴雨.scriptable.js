@@ -7,6 +7,7 @@
 const NS = 'qweather-sunrain:v2:'
 const DEFAULTS = {
   location: '自动',
+  bgTextMode: 'light', // 'light' (高亮白字+阴影, 默认), 'dark' (深色黑字), 'auto' (跟随系统)
 }
 
 // ─── 农历与节气常量 ───
@@ -3914,24 +3915,37 @@ function fmtTime(iso) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-// ─── 主题颜色与基础工具 (Scriptable Color.dynamic) ───
+// ─── 主题颜色与基础工具 (Scriptable Color.dynamic + 透明背景高对比配色) ───
 const dynColor = (lightHex, darkHex) => Color.dynamic(new Color(lightHex), new Color(darkHex))
+
+function resolveThemeColor(lightCardHex, darkCardHex, transLightTextHex, transDarkTextHex) {
+  if (!hasTransparentBg()) {
+    return dynColor(lightCardHex, darkCardHex)
+  }
+  const mode = (settings().bgTextMode || 'light').toLowerCase()
+  const hiLight = transLightTextHex || darkCardHex
+  const hiDark = transDarkTextHex || lightCardHex
+  if (mode === 'dark') return new Color(hiDark)
+  if (mode === 'auto') return dynColor(hiDark, hiLight)
+  return new Color(hiLight)
+}
+
 const COLORS = {
-  ink: () => dynColor('#16324A', '#F2F7FC'),
-  secondary: () => dynColor('#607287', '#A9B9CD'),
-  quiet: () => dynColor('#7B8A9D', '#7F93AD'),
-  blue: () => dynColor('#257CC5', '#78B8FF'),
-  warm: () => dynColor('#D8752A', '#FFAA67'),
-  teal: () => dynColor('#188E98', '#61D1D5'),
-  green: () => dynColor('#23946B', '#65D5A8'),
-  violet: () => dynColor('#6574C7', '#A8B3FF'),
-  cyan: () => dynColor('#1687B8', '#65C9EE'),
-  highColor: () => dynColor('#D85D3F', '#FF8B72'),
-  lowColor: () => dynColor('#4879AF', '#83B8ED'),
-  track: () => dynColor('#DCE6F1', '#2A3B53'),
-  tealTrack: () => dynColor('#D7E9EA', '#29484D'),
-  panel: () => dynColor('#EAF0F7', '#1D2B41'),
-  amber: () => dynColor('#A96A17', '#F1C077'),
+  ink: () => resolveThemeColor('#16324A', '#F2F7FC', '#FFFFFF', '#0D2235'),
+  secondary: () => resolveThemeColor('#607287', '#A9B9CD', '#E6F0FA', '#2C4257'),
+  quiet: () => resolveThemeColor('#7B8A9D', '#7F93AD', '#D4E4F7', '#41586E'),
+  blue: () => resolveThemeColor('#257CC5', '#78B8FF', '#82CCFF', '#0E5A9E'),
+  warm: () => resolveThemeColor('#D8752A', '#FFAA67', '#FFC478', '#B8540A'),
+  teal: () => resolveThemeColor('#188E98', '#61D1D5', '#72F2F7', '#0A6E78'),
+  green: () => resolveThemeColor('#23946B', '#65D5A8', '#78F7BE', '#0F754E'),
+  violet: () => resolveThemeColor('#6574C7', '#A8B3FF', '#C4CEFF', '#4352A8'),
+  cyan: () => resolveThemeColor('#1687B8', '#65C9EE', '#7CE2FF', '#0B6996'),
+  highColor: () => resolveThemeColor('#D85D3F', '#FF8B72', '#FFA28C', '#B83B1D'),
+  lowColor: () => resolveThemeColor('#4879AF', '#83B8ED', '#96CEFF', '#27588F'),
+  track: () => resolveThemeColor('#DCE6F1', '#2A3B53', '#FFFFFF45', '#00000028'),
+  tealTrack: () => resolveThemeColor('#D7E9EA', '#29484D', '#FFFFFF45', '#00000028'),
+  panel: () => resolveThemeColor('#EAF0F7', '#1D2B41', '#00000033', '#FFFFFF38'),
+  amber: () => resolveThemeColor('#A96A17', '#F1C077', '#FFD485', '#8C5205'),
 }
 
 // ─── 透明背景与壁纸裁切工具 ───
@@ -4219,6 +4233,18 @@ function addText(parent, str, opts = {}) {
   if (opts.color) t.textColor = opts.color
   t.lineLimit = opts.lineLimit != null ? opts.lineLimit : 1
   if (opts.minScale) t.minimumScaleFactor = opts.minScale
+  if (hasTransparentBg()) {
+    const mode = (settings().bgTextMode || 'light').toLowerCase()
+    if (mode === 'dark') {
+      t.shadowColor = new Color('#FFFFFF', 0.55)
+      t.shadowRadius = 2
+      t.shadowOffset = new Point(0, 0.8)
+    } else {
+      t.shadowColor = new Color('#000000', 0.52)
+      t.shadowRadius = 2.5
+      t.shadowOffset = new Point(0, 1)
+    }
+  }
   return t
 }
 
@@ -4501,7 +4527,14 @@ function addHumidityDetail(parent, data) {
     minScale: 0.75,
   })
   row.addSpacer(3)
-  const barImg = drawProgressBar(18, 3, humidity != null ? humidity / 100 : 0, '#D7E9EA', '#188E98')
+  const isTransLight = hasTransparentBg() && (settings().bgTextMode || 'light') !== 'dark'
+  const barImg = drawProgressBar(
+    18,
+    3,
+    humidity != null ? humidity / 100 : 0,
+    isTransLight ? '#FFFFFF45' : '#D7E9EA',
+    isTransLight ? '#72F2F7' : '#188E98'
+  )
   const imgW = row.addImage(barImg)
   imgW.imageSize = new Size(18, 3)
 }
@@ -4844,16 +4877,24 @@ async function runInAppMenu() {
       }
     }
 
+    const textModeLabel =
+      (s.bgTextMode || 'light') === 'dark'
+        ? '深色浓黑字'
+        : (s.bgTextMode || 'light') === 'auto'
+        ? '跟随系统'
+        : '高亮白字+立体阴影'
+
     addOption(
       '🎨 透明 / 自定义背景设置',
       hasTransparentBg()
-        ? '当前：已启用透明/自定义背景（点击可重新裁切壁纸或恢复默认渐变）'
+        ? `当前：已启用透明背景 · 字体：${textModeLabel}（点击可切换字体颜色或重裁壁纸）`
         : '当前：默认蓝灰渐变（点击可从空白桌面截图一键裁切透明背景）',
       async () => {
         const menu = new Alert()
         menu.title = '透明 / 自定义背景设置'
         menu.message =
-          '提示：如需“透明背景”，请先在手机主屏幕长按进入抖动模式，滑到最后一页空白桌面截图，然后选择第一项自动裁切。'
+          '提示：如果透明背景后文字看不清，可点击「切换透明背景字体颜色」或重新裁切时加上深色/浅色蒙版。'
+        menu.addAction('🔤 切换透明背景字体颜色（立即生效）')
         menu.addAction('✂️ 从空白桌面截图自动裁切（透明背景）')
         menu.addAction('🏞️ 从相册直接选择背景图')
         menu.addDestructiveAction('🗑️ 清除透明背景（恢复默认渐变）')
@@ -4861,8 +4902,27 @@ async function runInAppMenu() {
         const actionIdx = await menu.presentSheet()
         if (actionIdx === -1) return
 
+        if (actionIdx === 0) {
+          const tmAlert = new Alert()
+          tmAlert.title = '选择透明背景字体颜色'
+          tmAlert.message = '针对不同明暗度的手机壁纸，选择最清晰的文字与图标配色：'
+          tmAlert.addAction('🌟 纯白高亮字 + 立体阴影（推荐 · 适配深色/灰蓝/风景壁纸）')
+          tmAlert.addAction('🖤 深邃浓黑字 + 柔白光晕（适配纯白/极浅色壁纸）')
+          tmAlert.addAction('🔄 跟随系统白天/夜晚模式')
+          tmAlert.addCancelAction('取消')
+          const tmIdx = await tmAlert.presentSheet()
+          if (tmIdx === -1) return
+          const nextMode = tmIdx === 1 ? 'dark' : tmIdx === 2 ? 'auto' : 'light'
+          saveSettings({ bgTextMode: nextMode })
+          statusMsg = `透明背景字体已切换为：${
+            nextMode === 'dark' ? '深邃浓黑字' : nextMode === 'auto' ? '跟随系统' : '纯白高亮字+阴影'
+          }`
+          renderTable()
+          return
+        }
+
         const fm = FileManager.local()
-        if (actionIdx === 2) {
+        if (actionIdx === 3) {
           ;['small', 'medium', 'large'].forEach(f => {
             const p = getBgFilePath(f)
             if (fm.fileExists(p)) fm.remove(p)
@@ -4875,16 +4935,21 @@ async function runInAppMenu() {
 
         const maskAlert = new Alert()
         maskAlert.title = '选择背景蒙版效果'
-        maskAlert.message = '如果壁纸颜色较杂，叠加一层轻柔蒙版能让天气文字更清晰'
+        maskAlert.message = '如果壁纸颜色较杂，叠加一层半透明暗色或浅色蒙版能让天气文字更清晰'
         maskAlert.addAction('✨ 纯净全透明（不加蒙版）')
-        maskAlert.addAction('🌤️ 浅色柔光蒙版（适合浅色文字）')
-        maskAlert.addAction('🌙 深色暗调蒙版（适合深色模式）')
+        maskAlert.addAction('🌙 深色磨砂蒙版（推荐 · 压暗壁纸让白字更突出）')
+        maskAlert.addAction('🌤️ 浅色柔光蒙版（适合配深色文字）')
         maskAlert.addCancelAction('取消')
         const maskIdx = await maskAlert.presentSheet()
         if (maskIdx === -1) return
-        const overlayMode = maskIdx === 1 ? 'light' : maskIdx === 2 ? 'dark' : 'none'
+        const overlayMode = maskIdx === 1 ? 'dark' : maskIdx === 2 ? 'light' : 'none'
+        if (overlayMode === 'light') {
+          saveSettings({ bgTextMode: 'dark' })
+        } else {
+          saveSettings({ bgTextMode: 'light' })
+        }
 
-        if (actionIdx === 1) {
+        if (actionIdx === 2) {
           try {
             const rawImg = await Photos.fromLibrary()
             if (!rawImg) return

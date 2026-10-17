@@ -3908,24 +3908,32 @@ function fmtTime(iso) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-// ─── 主题颜色与基础工具 (Egern { light, dark } 动态色值) ───
+// ─── 主题颜色与基础工具 (Egern { light, dark } 动态色值 + 透明背景高对比度) ───
 const dynColor = (light, dark) => ({ light, dark })
+function egernThemeColor(light, dark, transLight) {
+  const env = (_activeCtx && _activeCtx.env) || {}
+  const raw = String(env.BG_IMAGE || env.BG || '').trim()
+  if (raw && !raw.startsWith('{{{')) {
+    return transLight || dark
+  }
+  return dynColor(light, dark)
+}
 const COLORS = {
-  ink: () => dynColor('#16324A', '#F2F7FC'),
-  secondary: () => dynColor('#607287', '#A9B9CD'),
-  quiet: () => dynColor('#7B8A9D', '#7F93AD'),
-  blue: () => dynColor('#257CC5', '#78B8FF'),
-  warm: () => dynColor('#D8752A', '#FFAA67'),
-  teal: () => dynColor('#188E98', '#61D1D5'),
-  green: () => dynColor('#23946B', '#65D5A8'),
-  violet: () => dynColor('#6574C7', '#A8B3FF'),
-  cyan: () => dynColor('#1687B8', '#65C9EE'),
-  highColor: () => dynColor('#D85D3F', '#FF8B72'),
-  lowColor: () => dynColor('#4879AF', '#83B8ED'),
-  track: () => dynColor('#DCE6F1', '#2A3B53'),
-  tealTrack: () => dynColor('#D7E9EA', '#29484D'),
-  panel: () => dynColor('#EAF0F7', '#1D2B41'),
-  amber: () => dynColor('#A96A17', '#F1C077'),
+  ink: () => egernThemeColor('#16324A', '#F2F7FC', '#FFFFFF'),
+  secondary: () => egernThemeColor('#607287', '#A9B9CD', '#E6F0FA'),
+  quiet: () => egernThemeColor('#7B8A9D', '#7F93AD', '#D4E4F7'),
+  blue: () => egernThemeColor('#257CC5', '#78B8FF', '#82CCFF'),
+  warm: () => egernThemeColor('#D8752A', '#FFAA67', '#FFC478'),
+  teal: () => egernThemeColor('#188E98', '#61D1D5', '#72F2F7'),
+  green: () => egernThemeColor('#23946B', '#65D5A8', '#78F7BE'),
+  violet: () => egernThemeColor('#6574C7', '#A8B3FF', '#C4CEFF'),
+  cyan: () => egernThemeColor('#1687B8', '#65C9EE', '#7CE2FF'),
+  highColor: () => egernThemeColor('#D85D3F', '#FF8B72', '#FFA28C'),
+  lowColor: () => egernThemeColor('#4879AF', '#83B8ED', '#96CEFF'),
+  track: () => egernThemeColor('#DCE6F1', '#2A3B53', '#FFFFFF45'),
+  tealTrack: () => egernThemeColor('#D7E9EA', '#29484D', '#FFFFFF45'),
+  panel: () => egernThemeColor('#EAF0F7', '#1D2B41', '#00000033'),
+  amber: () => egernThemeColor('#A96A17', '#F1C077', '#FFD485'),
   bgTop: () => dynColor('#FCFDFF', '#1B2A42'),
   bgBottom: () => dynColor('#EDF3FA', '#101A2C'),
 }
