@@ -4074,15 +4074,29 @@ function dateFestival(data) {
 }
 
 // ─── Egern Widget DSL 组件构建 ───
+function getCustomBgImage() {
+  const env = (_activeCtx && _activeCtx.env) || {}
+  const raw = String(env.BG_IMAGE || env.BG || '').trim()
+  if (!raw || raw.startsWith('{{{')) return ''
+  return raw
+}
+
 function createContainer(isRoot = false) {
+  const customBg = isRoot ? getCustomBgImage() : ''
   const node = isRoot
-    ? {
-        type: 'widget',
-        backgroundColor: COLORS.bgTop(),
-        backgroundGradient: widgetBackgroundGradient(),
-        refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-        children: [],
-      }
+    ? Object.assign(
+        {
+          type: 'widget',
+          refreshAfter: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          children: [],
+        },
+        customBg
+          ? { backgroundImage: customBg }
+          : {
+              backgroundColor: COLORS.bgTop(),
+              backgroundGradient: widgetBackgroundGradient(),
+            }
+      )
     : {
         type: 'stack',
         direction: 'row',
