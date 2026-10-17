@@ -3,6 +3,14 @@ description: 蓝灰 UI 风格 · 含农历节气/逐时预报/五日预报/湿�
 author: 小龙女她爸
 icon: https://raw.githubusercontent.com/SIJULY/egern-radar/main/weather-icon.png
 
+compat_arguments:
+  QWEATHER_LOCATION: '自动'
+compat_arguments_schema:
+  QWEATHER_LOCATION:
+    name: 位置
+    description: 填“自动”按 IP 自动定位，或填中文城市名（如 合肥、北京、阳江）及 9 位天气网城市代码
+    default_value: '自动'
+
 env_schema:
   QWEATHER_LOCATION:
     name: 位置
@@ -26,11 +34,12 @@ rules:
 scriptings:
 - generic:
     name: qweather
-    script_url: https://raw.githubusercontent.com/SIJULY/egern-radar/main/qweather.js
+    script_url: https://raw.githubusercontent.com/SIJULY/egern-radar/main/WeatherWdg.js
     timeout: 15
     env:
       QWEATHER_LOCATION: '{{{QWEATHER_LOCATION}}}'
 widgets:
 - name: 天气·晴雨
   script_name: qweather
+
 
