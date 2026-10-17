@@ -3782,9 +3782,18 @@ function renderMedium(m) {
   const T = { light: '#1C1C1E', dark: '#F2F2F7' };
   const S = { light: '#8E8E93', dark: '#AEAEB2' };
   const BLUE = '#007AFF';
-  const { icon, color: iconColor } = iconFromText(m.weather);
+  const { icon } = iconFromText(m.weather);
   const today = m.daily && m.daily[0];
 
+  const emojiMap = {
+    'sun.max.fill': '☀️', 'cloud.sun.fill': '⛅', 'cloud.fill': '☁️',
+    'cloud.drizzle.fill': '🌦️', 'cloud.rain.fill': '🌧️', 'cloud.heavyrain.fill': '⛈️',
+    'cloud.snow.fill': '🌨️', 'cloud.fog.fill': '🌫️', 'wind': '💨',
+    'cloud.bolt.rain.fill': '⛈️', 'snowflake': '❄️',
+  };
+  const wEmoji = emojiMap[icon] || '⛅';
+
+  // 顶部
   const header = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
@@ -3792,30 +3801,31 @@ function renderMedium(m) {
         type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
         children: [
           ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 14, height: 14, color: BLUE }] : []),
-          { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: BLUE, maxLines: 1 },
+          { type: 'text', text: m.city, font: { size: 19, weight: 'semibold' }, textColor: BLUE, maxLines: 1 },
         ],
       },
       { type: 'spacer' },
-      { type: 'text', text: m.time ? `观测 ${m.time.slice(0, 5)}` : '', font: { size: 12 }, textColor: S, maxLines: 1 },
+      { type: 'text', text: m.time ? `观测 ${m.time.slice(0, 5)}` : '', font: { size: 13 }, textColor: S, maxLines: 1 },
     ],
   };
 
+  // 大温度
   const tempRow = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
-      { type: 'text', text: `${m.temp || '--'}°`, font: { size: 48, weight: 'bold' }, textColor: T, maxLines: 1 },
-      { type: 'spacer', length: 8 },
-      { type: 'image', src: icon, width: 44, height: 44, color: iconColor },
+      { type: 'text', text: `${m.temp || '--'}°`, font: { size: 54, weight: 'bold' }, textColor: T, maxLines: 1 },
+      { type: 'spacer', length: 10 },
+      { type: 'text', text: wEmoji, font: { size: 42 }, maxLines: 1 },
       { type: 'spacer' },
       {
-        type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
+        type: 'stack', direction: 'column', alignItems: 'end', gap: 2,
         children: [
-          { type: 'text', text: m.weather || '', font: { size: 18, weight: 'medium' }, textColor: T, maxLines: 1 },
+          { type: 'text', text: m.weather || '', font: { size: 20, weight: 'medium' }, textColor: T, maxLines: 1 },
           {
-            type: 'stack', direction: 'row', gap: 6,
+            type: 'stack', direction: 'row', gap: 8,
             children: [
-              { type: 'text', text: today ? `高 ${today.tempMax}°` : '', font: { size: 14 }, textColor: '#FF6B35', maxLines: 1 },
-              { type: 'text', text: today ? `低 ${today.tempMin}°` : '', font: { size: 14 }, textColor: '#4A90D9', maxLines: 1 },
+              { type: 'text', text: today ? `高 ${today.tempMax}°` : '', font: { size: 15 }, textColor: '#FF6B35', maxLines: 1 },
+              { type: 'text', text: today ? `低 ${today.tempMin}°` : '', font: { size: 15 }, textColor: '#4A90D9', maxLines: 1 },
             ],
           },
         ],
@@ -3823,56 +3833,56 @@ function renderMedium(m) {
     ],
   };
 
-  const cell = (sym, c, txt) => ({
+  // 详情 2x3
+  const dc = (sym, c, label, val) => ({
     type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
     children: [
-      { type: 'image', src: sym, width: 15, height: 15, color: c },
-      { type: 'text', text: txt, font: { size: 12 }, textColor: T, maxLines: 1 },
+      { type: 'image', src: sym, width: 16, height: 16, color: c },
+      { type: 'text', text: label, font: { size: 13 }, textColor: c, maxLines: 1 },
+      { type: 'text', text: val, font: { size: 13, weight: 'medium' }, textColor: T, maxLines: 1 },
     ],
   });
   const humidity = Math.max(0, Math.min(100, parseInt(String(m.humidity).replace('%', ''), 10) || 0));
-
-  const row1 = {
-    type: 'stack', direction: 'row', alignItems: 'center',
+  const hbW = 56, hbH = 7, hbF = Math.round(hbW * humidity / 100);
+  const hbSvg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${hbW} ${hbH}'><rect x='0' y='0' width='${hbW}' height='${hbH}' rx='3.5' fill='%23E5E5EA'/><rect x='0' y='0' width='${hbF}' height='${hbH}' rx='3.5' fill='%2330B0C7'/></svg>`;
+  const humCell = {
+    type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
     children: [
-      cell('sf-symbol:thermometer', '#FF9500', `体感 ${m.temp || '--'}°`),
-      { type: 'spacer' },
-      cell('sf-symbol:wind', '#5AC8FA', `${m.windDir || ''}${m.windScale || ''}`.trim() || '风'),
-      { type: 'spacer' },
-      cell('sf-symbol:aqi.medium', '#34C759', `AQI ${m.aqi || '--'}`),
-    ],
-  };
-  const row2 = {
-    type: 'stack', direction: 'row', alignItems: 'center',
-    children: [
-      cell('sf-symbol:eye.fill', '#AF52DE', `能见度 ${m.vis || '--'}`),
-      { type: 'spacer' },
-      cell('sf-symbol:cloud.rain.fill', '#4A90D9', `降水 ${m.rain || '0'}mm`),
-      { type: 'spacer' },
-      cell('sf-symbol:drop.fill', '#34C759', `湿度 ${humidity}%`),
+      { type: 'image', src: 'sf-symbol:drop.fill', width: 16, height: 16, color: '#30B0C7' },
+      { type: 'text', text: '湿度', font: { size: 13 }, textColor: '#30B0C7', maxLines: 1 },
+      { type: 'text', text: `${humidity}%`, font: { size: 13, weight: 'medium' }, textColor: T, maxLines: 1 },
+      { type: 'image', src: `data:image/svg+xml,${hbSvg}`, width: hbW, height: hbH },
     ],
   };
 
+  // 5 天预报
   const fc = [];
-  for (let i = 1; i <= 4 && m.daily && m.daily[i]; i++) {
+  for (let i = 1; i <= 5 && m.daily && m.daily[i]; i++) {
     const d = m.daily[i];
-    const { icon: dic, color: dc } = iconFromCode(d.codeDay);
+    const { icon: dic } = iconFromCode(d.codeDay);
+    const dem = emojiMap[dic] || '⛅';
     const label = i === 1 ? '明天' : d.week;
     fc.push({
       type: 'stack', direction: 'column', alignItems: 'center', gap: 2,
       children: [
-        { type: 'text', text: label, font: { size: 12 }, textColor: '#4A90D9', maxLines: 1 },
-        { type: 'image', src: dic, width: 26, height: 26, color: dc },
+        { type: 'text', text: label, font: { size: 13 }, textColor: '#4A90D9', maxLines: 1 },
         {
-          type: 'stack', direction: 'row', gap: 4,
+          type: 'stack', direction: 'row', alignItems: 'center', gap: 2,
           children: [
-            { type: 'text', text: `${d.tempMax}°`, font: { size: 12, weight: 'semibold' }, textColor: '#FF6B35', maxLines: 1 },
-            { type: 'text', text: `${d.tempMin}°`, font: { size: 12 }, textColor: '#4A90D9', maxLines: 1 },
+            { type: 'text', text: dem, font: { size: 24 }, maxLines: 1 },
+            { type: 'text', text: `${d.rain || '0'}mm`, font: { size: 11 }, textColor: S, maxLines: 1 },
+          ],
+        },
+        {
+          type: 'stack', direction: 'row', gap: 5,
+          children: [
+            { type: 'text', text: `${d.tempMax}°`, font: { size: 14, weight: 'semibold' }, textColor: '#FF6B35', maxLines: 1 },
+            { type: 'text', text: `${d.tempMin}°`, font: { size: 14 }, textColor: '#4A90D9', maxLines: 1 },
           ],
         },
       ],
     });
-    if (i < 4) fc.push({ type: 'spacer' });
+    if (i < 5) fc.push({ type: 'spacer' });
   }
 
   return {
@@ -3882,12 +3892,30 @@ function renderMedium(m) {
     refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     children: [
       header,
-      { type: 'spacer', length: 2 },
-      tempRow,
       { type: 'spacer', length: 4 },
-      row1,
-      { type: 'spacer', length: 2 },
-      row2,
+      tempRow,
+      { type: 'spacer', length: 6 },
+      {
+        type: 'stack', direction: 'row', alignItems: 'center',
+        children: [
+          dc('sf-symbol:thermometer', '#FF9500', '体感', `${m.temp || '--'}°`),
+          { type: 'spacer' },
+          dc('sf-symbol:wind', '#30B0C7', (m.windDir || '').trim() || '风', (m.windScale || '').trim()),
+          { type: 'spacer' },
+          dc('sf-symbol:aqi.medium', '#34C759', 'AQI', `${m.aqiText ? m.aqiText + ' ' : ''}${m.aqi || '--'}`.trim()),
+        ],
+      },
+      { type: 'spacer', length: 3 },
+      {
+        type: 'stack', direction: 'row', alignItems: 'center',
+        children: [
+          dc('sf-symbol:eye.fill', '#AF52DE', '能见度', `${m.vis || '--'}`),
+          { type: 'spacer' },
+          dc('sf-symbol:cloud.rain.fill', '#4A90D9', '降水', `${m.rain || '0'}mm`),
+          { type: 'spacer' },
+          humCell,
+        ],
+      },
       { type: 'spacer' },
       { type: 'stack', direction: 'row', alignItems: 'center', children: fc },
     ],
