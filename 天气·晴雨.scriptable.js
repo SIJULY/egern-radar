@@ -4897,10 +4897,13 @@ async function runInAppMenu() {
         menu.addAction('🔤 切换透明背景字体颜色（立即生效）')
         menu.addAction('✂️ 从空白桌面截图自动裁切（透明背景）')
         menu.addAction('🏞️ 从相册直接选择背景图')
+        menu.addAction('📤 导出 / 复制透明背景给 Egern 使用')
         menu.addDestructiveAction('🗑️ 清除透明背景（恢复默认渐变）')
         menu.addCancelAction('取消')
         const actionIdx = await menu.presentSheet()
         if (actionIdx === -1) return
+
+        const fm = FileManager.local()
 
         if (actionIdx === 0) {
           const tmAlert = new Alert()
@@ -4921,8 +4924,55 @@ async function runInAppMenu() {
           return
         }
 
-        const fm = FileManager.local()
         if (actionIdx === 3) {
+          const candidates = [
+            getBgFilePath('medium'),
+            getBgFilePath('small'),
+            getBgFilePath('large'),
+            getCustomBgFilePath(),
+          ]
+          const foundPath = candidates.find(p => fm.fileExists(p))
+          if (!foundPath) {
+            await showAlert('尚未生成透明背景', '请先点击「✂️ 从空白桌面截图自动裁切」生成透明背景图后，再导出给 Egern。')
+            return
+          }
+          const expAlert = new Alert()
+          expAlert.title = '导出透明背景给 Egern'
+          expAlert.message = '可将裁切好的透明背景复制为 Base64 直接粘贴到 Egern「透明/背景图地址」，或保存到相册上传图床。'
+          expAlert.addAction('📋 复制 Base64 编码（直接粘贴到 Egern）')
+          expAlert.addAction('💾 保存裁切好的背景图到手机相册')
+          expAlert.addCancelAction('取消')
+          const expIdx = await expAlert.presentSheet()
+          if (expIdx === -1) return
+          const srcImg = fm.readImage(foundPath)
+          if (expIdx === 0) {
+            // 缩小到合理尺寸以确保 Base64 短小轻快，Egern 秒加载
+            const targetW = Math.min(540, Math.round(srcImg.size.width / 2))
+            const targetH = Math.max(1, Math.round((srcImg.size.height * targetW) / srcImg.size.width))
+            const dc = new DrawContext()
+            dc.size = new Size(targetW, targetH)
+            dc.opaque = true
+            dc.drawImageInRect(srcImg, new Rect(0, 0, targetW, targetH))
+            const smallImg = dc.getImage()
+            const b64 = Data.fromJPEG(smallImg, 0.72).toBase64String()
+            const dataUri = `data:image/jpeg;base64,${b64}`
+            Pasteboard.copyString(dataUri)
+            statusMsg = '已复制 Base64 背景图！请去 Egern 粘贴'
+            renderTable()
+            await showAlert(
+              '复制成功',
+              '已将裁切好的透明背景转换为 Base64 复制到剪贴板！\n\n现在打开 Egern -> 模块 -> 天气·晴雨 -> 在「透明/背景图地址」输入框长按粘贴即可！'
+            )
+          } else if (expIdx === 1) {
+            await Photos.save(srcImg)
+            statusMsg = '裁切好的透明背景图已保存到系统相册'
+            renderTable()
+            await showAlert('保存成功', '裁切好的透明背景图已保存到系统相册！你可以将它上传到 GitHub 仓库或图床，然后把直链 URL 填入 Egern。')
+          }
+          return
+        }
+
+        if (actionIdx === 4) {
           ;['small', 'medium', 'large'].forEach(f => {
             const p = getBgFilePath(f)
             if (fm.fileExists(p)) fm.remove(p)
