@@ -1,0 +1,36 @@
+name: 和风天气·晴雨
+description: 和风天气 QWeather v7 · 清爽蓝灰信息卡，小中号、五日预报
+author: 小龙女她爸
+icon: https://raw.githubusercontent.com/SIJULY/egern-radar/main/weather-icon.png
+
+env_schema:
+  QWEATHER_KEY:
+    name: API Key
+    description: 和风天气 API Key（控制台申请）
+    default_value: ''
+  QWEATHER_LOCATION:
+    name: 位置
+    description: 城市名（如合肥）或经度,纬度（如 117.27,31.86）
+    default_value: '合肥'
+
+dns: {}
+
+# 和风 API 直连
+rules:
+  - domain_suffix:
+      match: "qweather.com"
+      policy: DIRECT
+  - domain_suffix:
+      match: "qweather.net"
+      policy: DIRECT
+
+scriptings:
+- generic:
+    name: qweather
+    script_url: https://raw.githubusercontent.com/SIJULY/egern-radar/main/qweather.js
+    env:
+      QWEATHER_KEY: '{{{QWEATHER_KEY}}}'
+      QWEATHER_LOCATION: '{{{QWEATHER_LOCATION}}}'
+widgets:
+- name: qweather
+  script_name: qweather
