@@ -10,9 +10,11 @@ export default async function (ctx) {
   const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
 
   let cityName = (env.CITY || '').trim();
+  let isAuto = false;
   if (!cityName || cityName === '自动') {
     const ipCity = await getCityByIP(safeCtx);
     cityName = ipCity || '合肥';
+    isAuto = !!ipCity;
   }
   const userName = (env.USER_NAME || '').trim();
 
@@ -21,7 +23,7 @@ export default async function (ctx) {
     const data = await fetchWeather(safeCtx, code);
     const seven = await fetch7Day(safeCtx, code);
     if (seven) data.seven = seven;
-    const model = buildModel(data, city);
+    const model = buildModel(data, city, isAuto);
 
     if (widgetFamily.startsWith('accessory')) {
       return renderAccessory(model, widgetFamily);
@@ -3527,7 +3529,7 @@ async function fetch7Day(ctx, code) {
 }
 
 
-function buildModel(data, city) {
+function buildModel(data, city, isAuto) {
   const sk = data.dataSK || {};
   const dz = (data.cityDZ && data.cityDZ.weatherinfo) || {};
   const fcList = (data.fc && data.fc.f) || [];
@@ -3575,6 +3577,7 @@ function buildModel(data, city) {
       todayWeather: dz.weather || sk.weather || '',
       daily: daily7,
       life: life2,
+      isAuto: !!isAuto,
       updatedAt: Date.now(),
     };
   }
@@ -3625,6 +3628,7 @@ function buildModel(data, city) {
     todayWeather: dz.weather || sk.weather || '',
     daily,
     life,
+    isAuto: !!isAuto,
     updatedAt: Date.now(),
   };
 }
@@ -3729,6 +3733,7 @@ function renderSmall(m) {
   const header = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
+      ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 14, height: 14, color: '#007AFF' }] : []),
       { type: 'text', text: m.city, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
       m.aqi ? { type: 'text', text: `  AQI ${m.aqi}`, font: { size: 11 }, textColor: S, maxLines: 1 } : { type: 'spacer', length: 0 },
       { type: 'spacer' },
@@ -3844,7 +3849,13 @@ function renderMedium(m) {
           {
             type: 'stack', direction: 'column', gap: 1,
             children: [
-              { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
+              {
+                type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
+                children: [
+                  ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 15, height: 15, color: '#007AFF' }] : []),
+                  { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
+                ],
+              },
               { type: 'text', text: m.weather, font: { size: 13 }, textColor: T, maxLines: 1 },
               { type: 'text', text: timeStr, font: { size: 10 }, textColor: S, maxLines: 1 },
             ],
