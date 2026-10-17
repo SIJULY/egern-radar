@@ -3733,7 +3733,7 @@ function renderSmall(m) {
   const header = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
-      ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 14, height: 14, color: '#007AFF' }] : []),
+      ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 14, height: 14, color: '#007AFF' }, { type: 'spacer', length: 4 }] : []),
       { type: 'text', text: m.city, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
       m.aqi ? { type: 'text', text: `  AQI ${m.aqi}`, font: { size: 11 }, textColor: S, maxLines: 1 } : { type: 'spacer', length: 0 },
       { type: 'spacer' },
@@ -3852,7 +3852,7 @@ function renderMedium(m) {
               {
                 type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
                 children: [
-                  ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 15, height: 15, color: '#007AFF' }] : []),
+                  ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 15, height: 15, color: '#007AFF' }, { type: 'spacer', length: 4 }] : []),
                   { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
                 ],
               },
