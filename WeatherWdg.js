@@ -3847,12 +3847,12 @@ function renderMedium(m) {
           { type: 'image', src: icon, width: 36, height: 36, color: iconColor },
           { type: 'spacer', length: 8 },
           {
-            type: 'stack', direction: 'column', gap: 1,
+            type: 'stack', direction: 'column', gap: 1, alignItems: 'start',
             children: [
               {
                 type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
                 children: [
-                  ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 15, height: 15, color: '#007AFF' }, { type: 'spacer', length: 4 }] : []),
+                  ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 15, height: 15, color: '#007AFF' }, { type: 'spacer', length: 8 }] : []),
                   { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
                 ],
               },
