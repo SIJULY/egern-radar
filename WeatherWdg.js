@@ -1,5 +1,5 @@
 /**
- * 和风天气·晴雨 (Egern 小组件版)
+ * 天气·晴雨 (Egern 小组件版)
  * 数据来源：中国天气网 (weather.com.cn) 免 Key 方案（源自 WeatherWdg.js / WeatherWdg.yaml）
  * 环境变量：
  *   QWEATHER_LOCATION / CITY / LOCATION: 城市名（如 合肥、北京、阳江）、9 位城市代码，或填 "自动"（默认按 IP 自动定位）
@@ -4662,7 +4662,7 @@ function createErrorWidget(errMsg) {
   const w = createContainer(true)
   w.layoutVertically()
   w.setPadding(16, 16, 16, 16)
-  addText(w, '和风天气·晴雨', { size: 12, weight: 'semibold', color: COLORS.blue() })
+  addText(w, '天气·晴雨', { size: 12, weight: 'semibold', color: COLORS.blue() })
   w.addSpacer(6)
   addText(w, '天气暂不可用', { size: 18, weight: 'bold', color: COLORS.ink() })
   w.addSpacer(6)
