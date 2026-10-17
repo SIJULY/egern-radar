@@ -1,47 +1,190 @@
 /**
- * 中国天气网 - Egern 小组件（模块版）
- * 移植：小龙女她爸（原作者 iBL3ND）
- * 数据来源：https://www.weather.com.cn，无需 Key
+ * 天气·晴雨 (Egern 小组件版)
+ * 数据来源：中国天气网 (weather.com.cn) 免 Key 方案（源自 WeatherWdg.js / WeatherWdg.yaml）
+ * 环境变量：
+ *   QWEATHER_LOCATION / CITY / LOCATION: 城市名（如 合肥、北京、阳江）、9 位城市代码，或填 "自动"（默认按 IP 自动定位）
  */
 
-export default async function (ctx) {
-  const safeCtx = ctx || {};
-  const env = safeCtx.env || {};
-  const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
+const NS = 'qweather-sunrain:v2:'
+const DEFAULTS = {
+  location: '自动',
+}
 
-  let cityName = (env.CITY || '').trim();
-  let isAuto = false;
-  if (!cityName || cityName === '自动') {
-    const ipCity = await getCityByIP(safeCtx);
-    cityName = ipCity || '合肥';
-    isAuto = !!ipCity;
+// ─── 农历与节气常量 ───
+const lunarInfo = [
+  0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
+  0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
+  0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
+  0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
+  0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
+  0x06ca0,0x0b550,0x15355,0x04da0,0x0a5d0,0x14573,0x052d0,0x0a9a8,0x0e950,0x06aa0,
+  0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
+  0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b5a0,0x195a6,
+  0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
+  0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,
+  0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
+  0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
+  0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
+  0x05aa0,0x076a3,0x096d0,0x04bd7,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
+  0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
+]
+
+const LUNAR_MONTH_INDEX = {
+  正月: 1, 二月: 2, 三月: 3, 四月: 4, 五月: 5, 六月: 6,
+  七月: 7, 八月: 8, 九月: 9, 十月: 10, 冬月: 11, 腊月: 12,
+}
+const LUNAR_DAY_INDEX = {
+  初一: 1, 初二: 2, 初三: 3, 初四: 4, 初五: 5, 初六: 6, 初七: 7, 初八: 8, 初九: 9, 初十: 10,
+  十一: 11, 十二: 12, 十三: 13, 十四: 14, 十五: 15, 十六: 16, 十七: 17, 十八: 18, 十九: 19, 二十: 20,
+  廿一: 21, 廿二: 22, 廿三: 23, 廿四: 24, 廿五: 25, 廿六: 26, 廿七: 27, 廿八: 28, 廿九: 29, 三十: 30,
+}
+const LUNAR_FESTIVALS = [
+  [1, 1, '春节'], [1, 15, '元宵节'], [2, 2, '龙抬头'], [5, 5, '端午节'],
+  [7, 7, '七夕节'], [7, 15, '中元节'], [8, 15, '中秋节'], [9, 9, '重阳节'],
+  [10, 1, '寒衣节'], [10, 15, '下元节'], [12, 8, '腊八节'], [12, 23, '小年'],
+]
+
+function lYearDays(y) {
+  let sum = 348
+  for (let i = 0x8000; i > 0x8; i >>= 1) sum += (lunarInfo[y - 1900] & i) ? 1 : 0
+  return sum + ((lunarInfo[y - 1900] & 0xf) ? ((lunarInfo[y - 1900] & 0x10000) ? 30 : 29) : 0)
+}
+
+function getLunarDate_Precise(date) {
+  const lm = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
+  const ld = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十', '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十']
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate()
+  let offset = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(1900, 0, 31)) / 86400000)
+  let year = 1900
+  while (year < 2100 && offset >= lYearDays(year)) {
+    offset -= lYearDays(year)
+    year++
   }
-  const userName = (env.USER_NAME || '').trim();
+  const leapMonth = lunarInfo[year - 1900] & 0xf
+  let isLeap = false, month = 1, monthDays = 0
+  for (month = 1; month <= 12; month++) {
+    if (leapMonth > 0 && month === leapMonth + 1 && !isLeap) {
+      monthDays = (lunarInfo[year - 1900] & 0x10000) ? 30 : 29
+      if (offset < monthDays) { isLeap = true; break }
+      offset -= monthDays
+      isLeap = true
+    } else {
+      monthDays = (lunarInfo[year - 1900] & (0x10000 >> month)) ? 30 : 29
+      if (offset < monthDays) break
+      offset -= monthDays
+    }
+  }
+  const dayIndex = Math.max(0, Math.min(ld.length - 1, Math.floor(offset)))
+  const monthName = leapMonth > 0 && month === leapMonth + 1 && isLeap ? `闰${lm[leapMonth - 1]}` : lm[(month || 1) - 1]
+  return { month: monthName, day: ld[dayIndex] }
+}
 
+function nthWeekdayOfMonth(year, month, weekday, nth) {
+  const first = new Date(year, month, 1)
+  const offset = (7 + weekday - first.getDay()) % 7
+  return new Date(year, month, 1 + offset + (nth - 1) * 7)
+}
+
+function getNextFestivalInfo(date) {
+  const year = date.getFullYear()
+  const fixed = [
+    { name: '元旦', month: 1, day: 1 }, { name: '情人节', month: 2, day: 14 },
+    { name: '劳动节', month: 5, day: 1 }, { name: '儿童节', month: 6, day: 1 },
+    { name: '国庆节', month: 10, day: 1 }, { name: '圣诞节', month: 12, day: 25 },
+  ]
+  const all = [
+    ...fixed.map(it => ({ name: it.name, date: new Date(year, it.month - 1, it.day) })),
+    { name: '母亲节', date: nthWeekdayOfMonth(year, 4, 0, 2) },
+    { name: '父亲节', date: nthWeekdayOfMonth(year, 5, 0, 3) },
+    ...fixed.map(it => ({ name: it.name, date: new Date(year + 1, it.month - 1, it.day) })),
+    { name: '母亲节', date: nthWeekdayOfMonth(year + 1, 4, 0, 2) },
+    { name: '父亲节', date: nthWeekdayOfMonth(year + 1, 5, 0, 3) },
+  ]
+  const todayMs = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  let result = null
+  for (const item of all) {
+    const target = new Date(item.date.getFullYear(), item.date.getMonth(), item.date.getDate()).getTime()
+    const daysLeft = Math.round((target - todayMs) / 86400000)
+    if (daysLeft >= 0 && (!result || daysLeft < result.daysLeft)) result = { name: item.name, daysLeft }
+  }
+  return result
+}
+
+function isLunarNewYearsEve(date, baseDayMs) {
+  const lunar = getLunarDate_Precise(date)
+  if (lunar.month !== '腊月') return false
+  const tomorrowLunar = getLunarDate_Precise(new Date(baseDayMs + 86400000))
+  return tomorrowLunar.month === '正月' && tomorrowLunar.day === '初一'
+}
+
+function getNextLunarFestivalInfo(date) {
   try {
-    const { code, city } = await getCityCode(safeCtx, cityName);
-    const data = await fetchWeather(safeCtx, code);
-    const seven = await fetch7Day(safeCtx, code);
-    if (seven) data.seven = seven;
-    const model = buildModel(data, city, isAuto);
-
-    if (widgetFamily.startsWith('accessory')) {
-      return renderAccessory(model, widgetFamily);
+    const todayMs = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+    for (let i = 0; i <= 400; i++) {
+      const targetMs = todayMs + i * 86400000
+      const target = new Date(targetMs)
+      const lunar = getLunarDate_Precise(target)
+      const m = LUNAR_MONTH_INDEX[lunar.month.replace('闰', '')] || 0
+      const d = LUNAR_DAY_INDEX[lunar.day] || 0
+      if (isLunarNewYearsEve(target, targetMs)) return { name: '除夕', daysLeft: i }
+      for (const [fm, fd, fname] of LUNAR_FESTIVALS) {
+        if (m === fm && d === fd) return { name: fname, daysLeft: i }
+      }
     }
-    if (widgetFamily === 'systemSmall') {
-      return renderSmall(model);
-    }
-    if (widgetFamily === 'systemLarge') {
-      return renderLarge(model, userName);
-    }
-    return renderMedium(model);
+    return null
   } catch (e) {
-    try { console.error(e); } catch (_) {}
-    const msg = String((e && e.message) || e || '未知错误').slice(0, 80);
-    return renderError(`请求失败：${msg}`);
+    return null
   }
 }
 
+// ─── 存储与缓存工具 (适配 Egern ctx.storage) ───
+let _activeCtx = null
+
+function storageGet(key) {
+  try {
+    if (!_activeCtx || !_activeCtx.storage) return null
+    const raw = _activeCtx.storage.get(key)
+    if (!raw) return null
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch (e) {
+    return null
+  }
+}
+
+function storageSet(key, val) {
+  try {
+    if (!_activeCtx || !_activeCtx.storage) return
+    _activeCtx.storage.set(key, JSON.stringify(val))
+  } catch (e) {}
+}
+
+function settings(ctx) {
+  const c = ctx || _activeCtx || {}
+  const env = c.env || {}
+  const saved = storageGet(NS + 'settings') || {}
+  const loc = String(env.QWEATHER_LOCATION || env.CITY || env.LOCATION || saved.location || DEFAULTS.location).trim() || '自动'
+  return { location: loc }
+}
+
+function saveSettings(s) {
+  const value = {
+    location: String(s.location || '').trim() || '自动',
+  }
+  storageSet(NS + 'settings', value)
+}
+
+const age = s => Date.now() - new Date(s).getTime()
+const hash = s => {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
+  return (h >>> 0).toString(36)
+}
+
+function binding(param) {
+  return NS + 'cache:' + hash(String(param || '自动'))
+}
+
+// ─── 中国天气网 (weather.com.cn) 数据获取逻辑 (移植自 WeatherWdg.js / WeatherWdg.yaml) ───
 const CITY_PRESETS = {
   '北京': '101010100', '上海': '101020100', '天津': '101030100', '重庆': '101040100', '哈尔滨': '101050101', '齐齐哈尔': '101050201',
   '牡丹江': '101050301', '佳木斯': '101050401', '绥化': '101050501', '黑河': '101050601', '大兴安岭': '101050701', '伊春': '101050801',
@@ -3370,773 +3513,1176 @@ const EN2CN_CITY = {
   'Zuoyun': '左云'
 };
 
-async function getCityByIP(ctx) {
-  const tryFetch = async (url, pick) => {
+const WC_HEADERS = {
+  Referer: 'https://www.weather.com.cn/',
+  'User-Agent':
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1',
+}
+
+async function httpGetText(url, headers = {}, timeoutSec = 8) {
+  const ctx = _activeCtx
+  if (!ctx || !ctx.http) throw new Error('Egern HTTP 上下文不可用')
+  let lastErr = null
+  for (let i = 0; i < 2; i++) {
     try {
-      const resp = await ctx.http.get(url, { timeout: 8000 });
-      const j = JSON.parse(await resp.text());
-      const raw = pick(j);
+      const resp = await ctx.http.get(url, {
+        headers,
+        timeout: timeoutSec * 1000,
+      })
+      if (!resp || resp.status < 200 || resp.status >= 400) {
+        throw new Error(`HTTP ${resp ? resp.status : 'no-response'}`)
+      }
+      return typeof resp.text === 'function' ? await resp.text() : String(resp.body || '')
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr
+}
+
+async function httpGetJSON(url, headers = {}, timeoutSec = 6) {
+  const text = await httpGetText(url, Object.assign({ Accept: 'application/json' }, headers), timeoutSec)
+  return JSON.parse(text)
+}
+
+async function getCityByIP() {
+  const apis = [
+    { url: 'https://ipapi.co/json/', key: 'city' },
+    { url: 'https://freeipapi.com/api/json', key: 'cityName' },
+  ]
+  for (const api of apis) {
+    try {
+      const json = await httpGetJSON(api.url, {}, 5)
+      let raw = String((json && json[api.key]) || '').trim()
       if (raw) {
-        const cn = EN2CN_CITY[raw] || raw;
-        return String(cn).replace(/市$/, '');
+        const cn = EN2CN_CITY[raw] || raw.replace(/市$/, '')
+        storageSet(NS + 'last-ip-city', { city: cn, at: new Date().toISOString() })
+        return cn
       }
     } catch (_) {}
-    return '';
-  };
-  let city = await tryFetch('https://ipapi.co/json/', (j) => j.city);
-  if (!city) city = await tryFetch('https://freeipapi.com/api/json', (j) => j.cityName);
-  return city;
+  }
+  const last = storageGet(NS + 'last-ip-city')
+  if (last && last.city && age(last.at) < 86400000 * 3) return last.city
+  return '合肥'
 }
 
-async function getCityCode(ctx, cityName) {
-  if (/^\d{9}$/.test(cityName)) {
-    return { code: cityName, city: cityName };
-  }
-  if (CITY_PRESETS[cityName]) {
-    return { code: CITY_PRESETS[cityName], city: cityName };
-  }
+async function getCityCode(cityName) {
+  const cleanName = String(cityName || '').trim().replace(/(市|区|县)$/, '')
+  if (/^\d{9}$/.test(cleanName)) return cleanName
+  if (CITY_PRESETS[cleanName]) return CITY_PRESETS[cleanName]
+  if (CITY_PRESETS[cityName]) return CITY_PRESETS[cityName]
+
+  const ck = NS + 'citycode:' + cleanName
+  const cached = storageGet(ck)
+  if (cached && cached.code && age(cached.at) < 86400000 * 30) return cached.code
+
   try {
-    const url = `https://toy1.weather.com.cn/search?cityname=${encodeURIComponent(cityName)}`;
-    const resp = await ctx.http.get(url, {
-      headers: {
-        Referer: 'https://www.weather.com.cn/',
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1',
-      },
-      timeout: 8000,
-    });
-    const text = await resp.text();
-    const refs = [...text.matchAll(/"ref":"([^"]+)"/g)].map((m) => m[1]);
-    for (const ref of refs) {
-      const parts = ref.split('~');
-      const code = parts[0] || '';
-      const name = parts[2] || '';
-      if (/^\d{9}$/.test(code) && name === cityName) {
-        return { code, city: cityName };
-      }
-    }
-    for (const ref of refs) {
-      const code = (ref.split('~')[0] || '');
-      if (/^\d{9}$/.test(code)) {
-        return { code, city: cityName };
-      }
-    }
-  } catch (_) {}
-  return { code: '101010100', city: cityName };
-}
-
-async function fetchWeather(ctx, code) {
-  const url = `https://d1.weather.com.cn/weather_index/${code}.html`;
-  const resp = await ctx.http.get(url, {
-    headers: {
-      Referer: 'https://www.weather.com.cn/',
-      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1',
-    },
-    timeout: 10000,
-  });
-  if (!resp || resp.status !== 200) {
-    throw new Error(`HTTP ${resp ? resp.status : 'no-response'}`);
-  }
-  const text = await resp.text();
-  const pick = (name) => {
-    const idx = text.indexOf(`var ${name}`);
-    if (idx < 0) return null;
-    const start = text.indexOf('{', idx);
-    if (start < 0) return null;
-    let depth = 0;
-    let inStr = false;
-    let esc = false;
-    for (let i = start; i < text.length; i++) {
-      const ch = text[i];
-      if (inStr) {
-        if (esc) { esc = false; continue; }
-        if (ch === '\\') { esc = true; continue; }
-        if (ch === '"') inStr = false;
-        continue;
-      }
-      if (ch === '"') { inStr = true; continue; }
-      if (ch === '{') depth++;
-      if (ch === '}') {
-        depth--;
-        if (depth === 0) {
-          try { return JSON.parse(text.slice(start, i + 1)); } catch (_) { return null; }
+    const url = `https://toy1.weather.com.cn/search?cityname=${encodeURIComponent(cleanName)}`
+    const text = await httpGetText(url, WC_HEADERS, 6)
+    const start = text.indexOf('[')
+    const end = text.lastIndexOf(']')
+    if (start >= 0 && end > start) {
+      const arr = JSON.parse(text.slice(start, end + 1))
+      if (Array.isArray(arr) && arr.length > 0) {
+        for (const item of arr) {
+          const ref = String(item.ref || '')
+          const parts = ref.split('~')
+          const code = parts[0]
+          const name = parts[2]
+          if (/^\d{9}$/.test(code) && (name === cleanName || name === cityName)) {
+            storageSet(ck, { code, at: new Date().toISOString() })
+            return code
+          }
+        }
+        const firstCode = String(arr[0].ref || '').split('~')[0]
+        if (/^\d{9}$/.test(firstCode)) {
+          storageSet(ck, { code: firstCode, at: new Date().toISOString() })
+          return firstCode
         }
       }
     }
-    return null;
-  };
-  const cityDZ = pick('cityDZ');
-  const dataSK = pick('dataSK');
-  const dataZS = pick('dataZS');
-  const fc = pick('fc');
-  if (!dataSK || !cityDZ) {
-    throw new Error('接口无有效返回');
-  }
-  return { cityDZ, dataSK, dataZS, fc };
+  } catch (_) {}
+
+  return CITY_PRESETS['合肥']
 }
 
-async function fetch7Day(ctx, code) {
-  try {
-    const url = `https://www.weather.com.cn/weather/${code}.shtml`;
-    const resp = await ctx.http.get(url, {
-      headers: {
-        Referer: 'https://www.weather.com.cn/',
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1',
-      },
-      timeout: 10000,
-    });
-    if (!resp || resp.status !== 200) return null;
-    const html = await resp.text();
-    const ulIdx = html.indexOf('id="7d"');
-    if (ulIdx < 0) return null;
-    const ulStart = html.indexOf('<ul class="t', ulIdx);
-    const ulEnd = html.indexOf('</ul>', ulStart);
-    if (ulStart < 0 || ulEnd < 0) return null;
-    const ul = html.slice(ulStart, ulEnd);
-    const liMatches = [...ul.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)];
-    const days = [];
-    for (const m of liMatches) {
-      const li = m[1];
-      const h1 = (li.match(/<h1>([^<]+)<\/h1>/) || [,''])[1];
-      const wea = (li.match(/<p[^>]*class="wea"[^>]*>([^<]+)<\/p>/) || [,''])[1];
-      let tem = li.match(/<p[^>]*class="tem"[^>]*>\s*<span>([^<]+)<\/span>\/<i>([^<]+)<\/i>/);
-      if (!tem) {
-        const lowOnly = li.match(/<p[^>]*class="tem"[^>]*>\s*<i>([^<]+)<\/i>/);
-        if (lowOnly) tem = [null, '', lowOnly[1]];
+function pickVarJSON(text, name) {
+  const idx = text.indexOf(`var ${name}`)
+  if (idx < 0) return null
+  const start = text.indexOf('{', idx)
+  if (start < 0) return null
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inStr) {
+      if (esc) {
+        esc = false
+        continue
       }
-      const dayCode = (li.match(/png40 d([0-9]+)/) || [,''])[1];
-      const nightCode = (li.match(/png40 n([0-9]+)/) || [,''])[1];
-      const win = (li.match(/<p[^>]*class="win"[^>]*>[\s\S]*?<i>([^<]+)<\/i>/) || [,''])[1];
-      if (!h1) continue;
-      const datePart = h1.split('（')[0] || '';
-      const weekPart = (h1.match(/\uff08([^\uff09]+)\uff09/) || [,''])[1];
-      days.push({
-        date: datePart,
-        week: weekPart || '',
-        tempMax: tem ? (tem[1] || '').trim().replace('℃', '') : '',
-        tempMin: tem ? (tem[2] || '').replace('℃', '').trim() : '',
-        codeDay: dayCode || '',
-        codeNight: nightCode || '',
-        textDay: (wea || '').trim(),
-        textNight: '',
-        windDay: (win || '').trim(),
-        windNight: '',
-      });
+      if (ch === '\\') {
+        esc = true
+        continue
+      }
+      if (ch === '"') inStr = false
+      continue
     }
-    return days.length >= 5 ? days : null;
+    if (ch === '"') {
+      inStr = true
+      continue
+    }
+    if (ch === '{') depth++
+    if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        const jsonText = text.slice(start, i + 1)
+        try {
+          return JSON.parse(jsonText)
+        } catch (_) {
+          return null
+        }
+      }
+    }
+  }
+  return null
+}
+
+async function fetchWeather(code) {
+  const url = `https://d1.weather.com.cn/weather_index/${code}.html?_=${Date.now()}`
+  const text = await httpGetText(url, WC_HEADERS, 8)
+  const cityDZ = pickVarJSON(text, 'cityDZ')
+  const dataSK = pickVarJSON(text, 'dataSK')
+  const dataZS = pickVarJSON(text, 'dataZS')
+  const fc = pickVarJSON(text, 'fc')
+  const alarmDZ = pickVarJSON(text, 'alarmDZ')
+  return { cityDZ, dataSK, dataZS, fc, alarmDZ }
+}
+
+async function fetch7Day(code) {
+  try {
+    const url = `https://www.weather.com.cn/weather/${code}.shtml`
+    const html = await httpGetText(url, WC_HEADERS, 8)
+    const hour3 = pickVarJSON(html, 'hour3data')
+
+    const ulMatch = html.match(/id="7d"[\s\S]*?<ul[^>]*class="t clearfix"[^>]*>([\s\S]*?)<\/ul>/i)
+    const block = ulMatch ? ulMatch[1] : html
+    const liList = block.match(/<li[\s\S]*?<\/li>/gi) || []
+    const out = []
+
+    for (const li of liList) {
+      const h1 = (li.match(/<h1>(.*?)<\/h1>/i)?.[1] || '').trim()
+      const wea = (li.match(/class="wea"[^>]*>(.*?)<\/p>/i)?.[1] || '').trim()
+      if (!h1 || !wea) continue
+
+      const high = (li.match(/class="tem"[\s\S]*?<span>(-?\d+)<\/span>/i)?.[1] || '').trim()
+      const low = (li.match(/class="tem"[\s\S]*?<i>(-?\d+)℃?<\/i>/i)?.[1] || '').trim()
+
+      const codes = [...li.matchAll(/class="big[dn](\d{2})"/gi)].map(m => m[1])
+      const codeDay = codes[0] || ''
+      const codeNight = codes[1] || codeDay || ''
+
+      const win = (li.match(/class="win"[\s\S]*?<i>(.*?)<\/i>/i)?.[1] || '').trim()
+
+      const dm = h1.match(/(\d+日)（(.*?)）/)
+      const date = dm ? dm[1] : h1
+      const week = dm ? dm[2] : ''
+
+      out.push({
+        date,
+        week,
+        tempMax: high || '--',
+        tempMin: low || '--',
+        codeDay,
+        codeNight,
+        textDay: wea,
+        windDay: win,
+      })
+
+      if (out.length >= 7) break
+    }
+    return { seven: out, hour3 }
   } catch (_) {
-    return null;
+    return { seven: [], hour3: null }
   }
 }
 
+function calcFeelsLike(tempVal, rhVal, windKmhVal) {
+  const t = Number(tempVal)
+  if (!Number.isFinite(t)) return ''
+  const rh = Number(String(rhVal || '').replace('%', ''))
+  const vKmh = Number(String(windKmhVal || '').replace(/km\/h/i, ''))
+  const vMs = Number.isFinite(vKmh) ? vKmh / 3.6 : 1.5
+  const h = Number.isFinite(rh) ? rh : 50
+  const e = (h / 100) * 6.105 * Math.exp((17.27 * t) / (237.7 + t))
+  const at = t + 0.33 * e - 0.7 * vMs - 4.0
+  return String(Math.round(at))
+}
 
-function buildModel(data, city, isAuto) {
-  const sk = data.dataSK || {};
-  const dz = (data.cityDZ && data.cityDZ.weatherinfo) || {};
-  const fcList = (data.fc && data.fc.f) || [];
-  if (data.seven && data.seven.length >= 5) {
-    const daily7 = data.seven.slice(0, 7).map((d) => ({
-      date: d.date || '',
-      week: d.week || '',
-      tempMax: d.tempMax || '',
-      tempMin: d.tempMin || '',
-      codeDay: String(d.codeDay || ''),
-      codeNight: String(d.codeNight || ''),
-      textDay: d.textDay || '',
-      textNight: d.textNight || '',
-      windDay: d.windDay || '',
-      windNight: d.windNight || '',
-    }));
-    if (daily7[0] && !daily7[0].tempMax && fcList[0]) {
-      daily7[0].tempMax = fcList[0].fc || '';
-      daily7[0].tempMin = daily7[0].tempMin || fcList[0].fd || '';
-      if (!daily7[0].codeDay && fcList[0].fa) daily7[0].codeDay = String(fcList[0].fa);
-    }
-    const zs2 = (data.dataZS && data.dataZS.zs) || {};
-    const life2 = [];
-    const lifeMap2 = [['ct', '穿衣'], ['xc', '洗车'], ['uv', '紫外线'], ['gm', '感冒']];
-    for (const [k, label] of lifeMap2) {
-      const hint = zs2[`${k}_hint`];
-      if (hint) life2.push({ label, hint, des: zs2[`${k}_des_s`] || '' });
+function aqiCategory(val) {
+  const n = Number(val)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  if (n <= 50) return '优'
+  if (n <= 100) return '良'
+  if (n <= 150) return '轻度'
+  if (n <= 200) return '中度'
+  if (n <= 300) return '重度'
+  return '严重'
+}
+
+function validTempStr(v) {
+  const s = String(v == null ? '' : v).trim()
+  if (!s || s === '--' || s === '999' || s === '-999') return ''
+  const n = Number(s)
+  return Number.isFinite(n) && Math.abs(n) < 90 ? String(Math.round(n)) : ''
+}
+
+function parseHour3List(hour3, baseIsoDate) {
+  const list = (hour3 && hour3['1d'] && hour3['1d'].length ? hour3['1d'] : [])
+  if (!list.length) return []
+  const [y, m] = baseIsoDate.split('-').map(Number)
+  return list.slice(0, 8).map(item => {
+    const parts = String(item || '').split(',')
+    const timeRaw = parts[0] || ''
+    const codeRaw = parts[1] || ''
+    const textRaw = parts[2] || ''
+    const tempRaw = String(parts[3] || '').replace(/℃/g, '').trim()
+    const dm = timeRaw.match(/(\d{1,2})日(\d{1,2})时/)
+    let fxTime = ''
+    if (dm) {
+      const dt = new Date(y, m - 1, Number(dm[1]), Number(dm[2]), 0, 0)
+      fxTime = dt.toISOString()
     }
     return {
-      city: sk.cityname || dz.city || city,
-      date: sk.date || '',
-      time: sk.time || '',
-      temp: sk.temp || '',
-      weather: sk.weather || dz.weather || '',
-      windDir: sk.WD || dz.wd || '',
-      windScale: sk.WS || dz.ws || '',
-      humidity: sk.SD || '',
-      pressure: sk.qy || '',
-      rain: sk.rain || '',
-      rain24h: sk.rain24h || '',
-      aqi: sk.aqi || '',
-      vis: sk.njd || '',
-      todayMax: dz.temp || (daily7[0] ? daily7[0].tempMax : ''),
-      todayMin: dz.tempn || (daily7[0] ? daily7[0].tempMin : ''),
-      todayWeather: dz.weather || sk.weather || '',
-      daily: daily7,
-      life: life2,
-      isAuto: !!isAuto,
-      updatedAt: Date.now(),
-    };
-  }
-  const zs = (data.dataZS && data.dataZS.zs) || {};
-
-  const daily = fcList.slice(0, 5).map((d) => ({
-    date: d.fi || '',
-    week: d.fj || '',
-    tempMax: d.fc || '',
-    tempMin: d.fd || '',
-    codeDay: String(d.fa || ''),
-    codeNight: String(d.fb || ''),
-    textDay: codeToText(d.fa),
-    textNight: codeToText(d.fb),
-    windDay: `${d.fe || ''} ${d.fg || ''}`.trim(),
-    windNight: `${d.ff || ''} ${d.fh || ''}`.trim(),
-  }));
-
-  const life = [];
-  const lifeMap = [
-    ['ct', '穿衣'], ['xc', '洗车'], ['uv', '紫外线'], ['gm', '感冒'],
-  ];
-  for (const [k, label] of lifeMap) {
-    const name = zs[`${k}_name`];
-    const hint = zs[`${k}_hint`];
-    const des = zs[`${k}_des_s`];
-    if (name || hint) {
-      life.push({ label: label, hint: hint || '', des: des || '' });
+      fxTime: fxTime || `${baseIsoDate}T00:00:00`,
+      hourText: dm ? `${String(dm[2]).padStart(2, '0')}:00` : timeRaw,
+      icon: codeRaw || textRaw,
+      text: textRaw,
+      temp: tempRaw,
     }
-  }
+  })
+}
 
+async function getWeather(force = false, param) {
+  const raw = String(param != null ? param : settings().location).trim()
+  const isAuto = !raw || /^(自动|gps|auto)$/i.test(raw)
+  const cacheKey = binding(isAuto ? '自动' : raw)
+  const cached = storageGet(cacheKey)
+  if (!force && cached && age(cached.fetchedAt) >= 0 && age(cached.fetchedAt) < 1200000) {
+    return Object.assign({}, cached, { stale: false })
+  }
+  try {
+    const targetCity = isAuto ? await getCityByIP() : raw
+    const code = await getCityCode(targetCity)
+    const [rawWeather, sevenRes] = await Promise.all([fetchWeather(code), fetch7Day(code)])
+
+    const dz = (rawWeather && rawWeather.cityDZ && rawWeather.cityDZ.weatherinfo) || {}
+    const sk = (rawWeather && rawWeather.dataSK) || {}
+    const zs = (rawWeather && rawWeather.dataZS && rawWeather.dataZS.zs) || {}
+    const fcList = (rawWeather && rawWeather.fc && rawWeather.fc.f) || []
+    const alarms = (rawWeather && rawWeather.alarmDZ && rawWeather.alarmDZ.w) || []
+    const seven = (sevenRes && sevenRes.seven) || []
+
+    if (!sk.temp && !dz.temp && !fcList.length) throw new Error('中国天气网实况数据暂不可用')
+
+    const nowDate = new Date()
+    const baseIso = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`
+    const skTime = /^\d{1,2}:\d{2}$/.test(String(sk.time || '').trim())
+      ? String(sk.time).trim().padStart(5, '0')
+      : `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`
+    const obsTime = `${baseIso}T${skTime}:00+08:00`
+
+    const sourceDays = seven.length > 0
+      ? seven
+      : fcList.map((f, idx) => ({
+          date: f.fi || '',
+          week: idx === 0 ? '今天' : (f.fj || ''),
+          tempMax: f.fc,
+          tempMin: f.fd,
+          codeDay: f.fa,
+          codeNight: f.fb,
+          textDay: codeToText(f.fa) || codeToText(f.fb) || dz.weather || sk.weather || '',
+          windDay: f.fg || '',
+        }))
+
+    const baseMs = Date.parse(`${baseIso}T00:00:00Z`)
+    const days = sourceDays.map((d, idx) => {
+      const fxDate = new Date(baseMs + idx * 86400000).toISOString().slice(0, 10)
+      const fcFallback = fcList[idx] || {}
+      let tMax = validTempStr(d.tempMax) || validTempStr(fcFallback.fc)
+      let tMin = validTempStr(d.tempMin) || validTempStr(fcFallback.fd)
+      if (idx === 0) {
+        tMax = tMax || validTempStr(dz.temp) || validTempStr(sk.temp)
+        tMin = tMin || validTempStr(dz.tempn) || validTempStr(sk.temp)
+      }
+      if (tMax && tMin && Number(tMax) < Number(tMin)) { const tmp = tMax; tMax = tMin; tMin = tmp }
+      const textDay = d.textDay || codeToText(d.codeDay) || (idx === 0 ? (dz.weather || sk.weather) : '') || '—'
+      return {
+        fxDate,
+        tempMax: tMax || '--',
+        tempMin: tMin || '--',
+        iconDay: d.codeDay || textDay,
+        iconNight: d.codeNight || d.codeDay || textDay,
+        textDay,
+        windDay: d.windDay || '',
+        precip: idx === 0 ? String(sk.rain24h || sk.rain || '0') : '',
+        sunrise: '06:00',
+        sunset: '18:30',
+      }
+    })
+
+    const todayObj = days[0] || {
+      fxDate: baseIso,
+      tempMax: validTempStr(dz.temp) || validTempStr(fcList[0] && fcList[0].fc) || validTempStr(sk.temp) || '--',
+      tempMin: validTempStr(dz.tempn) || validTempStr(fcList[0] && fcList[0].fd) || validTempStr(sk.temp) || '--',
+      iconDay: sk.weathercode || dz.weathercode || sk.weather || '00',
+      textDay: dz.weather || sk.weather || '—',
+      precip: String(sk.rain24h || sk.rain || '0'),
+      sunrise: '06:00',
+      sunset: '18:30',
+    }
+
+    const curTemp = validTempStr(sk.temp) || todayObj.tempMax || '--'
+    const humidityNum = String(sk.SD || sk.sd || '').replace(/%/g, '').trim()
+    const windScaleClean = String(sk.WS || dz.ws || '').replace(/级.*$/, '').trim()
+    const windSpeedClean = String(sk.wse || '').replace(/km\/h/i, '').trim()
+    const visClean = String(sk.njd || '').replace(/km/i, '').trim()
+
+    const now = {
+      temp: String(sk.temp || curTemp).replace(/℃/g, '').trim(),
+      feelsLike: calcFeelsLike(sk.temp || curTemp, humidityNum, windSpeedClean) || curTemp,
+      text: String(sk.weather || dz.weather || todayObj.textDay || '—').trim(),
+      icon: String(sk.weather || sk.weathercode || dz.weathercode || '00').trim(),
+      humidity: humidityNum,
+      windDir: String(sk.WD || dz.wd || '').trim(),
+      windScale: windScaleClean,
+      windSpeed: windSpeedClean,
+      precip: String(sk.rain || sk.rain24h || '0').trim(),
+      vis: visClean,
+      pressure: String(sk.qy || '').trim(),
+    }
+
+    const aqiVal = String(sk.aqi || '').trim()
+    const aqi = aqiVal && Number.isFinite(Number(aqiVal)) ? { value: aqiVal, label: aqiCategory(aqiVal) } : undefined
+    const warnings = alarms && alarms.length
+      ? alarms.map(w => ({ title: String(w.w13 || `${w.w5 || ''}${w.w7 || ''}预警` || '').trim() })).filter(w => w.title && w.title !== '预警')
+      : []
+
+    const data = {
+      place: String(sk.cityname || dz.city || targetCity || '合肥').replace(/市$/, ''),
+      isAuto,
+      fetchedAt: new Date().toISOString(),
+      obsTime,
+      now,
+      daily: days,
+      today: todayObj,
+      hourly: parseHour3List(sevenRes && sevenRes.hour3, baseIso),
+      aqi,
+      warnings,
+      life: {
+        cloth: zs.ct_hint || zs.ct_des_s || '--',
+        uv: zs.uv_hint || zs.ziwanxian_hint || '--',
+        car: zs.xc_hint || '--',
+        cold: zs.gm_hint || '--',
+        umbrella: zs.ys_hint || '--',
+      },
+      partial: [],
+    }
+    storageSet(cacheKey, data)
+    return data
+  } catch (e) {
+    if (cached && age(cached.fetchedAt) >= 0 && age(cached.fetchedAt) < 21600000) {
+      return Object.assign({}, cached, { stale: true })
+    }
+    throw e
+  }
+}
+
+function dayLabel(date) {
+  return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(`${date.slice(0, 10)}T12:00:00Z`).getUTCDay()] || '—'
+}
+
+function fmtTime(iso) {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return '--:--'
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// ─── 主题颜色与基础工具 (Egern { light, dark } 动态色值) ───
+const dynColor = (light, dark) => ({ light, dark })
+const COLORS = {
+  ink: () => dynColor('#16324A', '#F2F7FC'),
+  secondary: () => dynColor('#607287', '#A9B9CD'),
+  quiet: () => dynColor('#7B8A9D', '#7F93AD'),
+  blue: () => dynColor('#257CC5', '#78B8FF'),
+  warm: () => dynColor('#D8752A', '#FFAA67'),
+  teal: () => dynColor('#188E98', '#61D1D5'),
+  green: () => dynColor('#23946B', '#65D5A8'),
+  violet: () => dynColor('#6574C7', '#A8B3FF'),
+  cyan: () => dynColor('#1687B8', '#65C9EE'),
+  highColor: () => dynColor('#D85D3F', '#FF8B72'),
+  lowColor: () => dynColor('#4879AF', '#83B8ED'),
+  track: () => dynColor('#DCE6F1', '#2A3B53'),
+  tealTrack: () => dynColor('#D7E9EA', '#29484D'),
+  panel: () => dynColor('#EAF0F7', '#1D2B41'),
+  amber: () => dynColor('#A96A17', '#F1C077'),
+  bgTop: () => dynColor('#FCFDFF', '#1B2A42'),
+  bgBottom: () => dynColor('#EDF3FA', '#101A2C'),
+}
+
+function widgetBackgroundGradient() {
   return {
-    city: sk.cityname || dz.city || city,
-    date: sk.date || '',
-    time: sk.time || '',
-    temp: sk.temp || '',
-    weather: sk.weather || dz.weather || '',
-    windDir: sk.WD || dz.wd || '',
-    windScale: sk.WS || dz.ws || '',
-    humidity: sk.SD || '',
-    pressure: sk.qy || '',
-    rain: sk.rain || '',
-    rain24h: sk.rain24h || '',
-    aqi: sk.aqi || '',
-    vis: sk.njd || '',
-    todayMax: dz.temp || (daily[0] ? daily[0].tempMax : ''),
-    todayMin: dz.tempn || (daily[0] ? daily[0].tempMin : ''),
-    todayWeather: dz.weather || sk.weather || '',
-    daily,
-    life,
-    isAuto: !!isAuto,
-    updatedAt: Date.now(),
-  };
+    type: 'linear',
+    colors: [COLORS.bgTop(), COLORS.bgBottom()],
+    stops: [0, 1],
+    startPoint: { x: 0.5, y: 0 },
+    endPoint: { x: 0.5, y: 1 },
+  }
+}
+
+function clean(value) {
+  const s = String(value == null ? '' : value).trim()
+  return !s || /^(?:--?|null|undefined|nan|n\/a)$/i.test(s) ? '' : s
+}
+
+function numeric(value) {
+  const s = clean(value)
+  if (!s) return undefined
+  const n = Number(s)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function temp(value) {
+  const n = numeric(value)
+  return n == null ? '—' : `${Math.round(n)}°`
+}
+
+function unit(value, suffix) {
+  return clean(value) ? `${clean(value)}${suffix}` : '—'
+}
+
+function updated(data) {
+  const date = clean(data.fetchedAt)
+  if (!date || !Number.isFinite(Date.parse(date))) return '--:--'
+  const m = clean(data.obsTime).match(/T(\d{2}:\d{2})/)
+  const time = m ? m[1] : fmtTime(date)
+  return `${data.stale ? '缓存 ' : ''}${time}`
+}
+
+function dateOnly(value) {
+  const s = clean(value).slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return ''
+  const d = new Date(`${s}T00:00:00Z`)
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : ''
+}
+
+function baseDate(data) {
+  return dateOnly(data.today && data.today.fxDate) || dateOnly(data.obsTime) || dateOnly(data.fetchedAt)
+}
+
+function getToday(data) {
+  const b = baseDate(data)
+  return data.today || (data.daily || []).find(d => d.fxDate === b)
+}
+
+function getForecast(data) {
+  const base = baseDate(data)
+  if (!base) return []
+  const start = Date.parse(`${base}T00:00:00Z`)
+  return Array.from({ length: 5 }, (_, i) => {
+    const date = new Date(start + (i + 1) * 86400000).toISOString().slice(0, 10)
+    return { date, day: (data.daily || []).find(d => d.fxDate === date) }
+  })
+}
+
+function isNight(data) {
+  const observation = clean(data.obsTime)
+  const m = observation.match(/T(\d{2}:\d{2})/)
+  const day = getToday(data)
+  const rise = clean(day && day.sunrise)
+  const set = clean(day && day.sunset)
+  if (m && rise && set) return m[1] < rise || m[1] >= set
+  const t = observation.match(/T(\d{2}):/)
+  return t ? Number(t[1]) < 6 || Number(t[1]) >= 18 : false
 }
 
 function codeToText(code) {
+  const c = String(code == null ? '' : code).replace(/^[dn]/i, '')
   const map = {
-    '00': '晴', '01': '多云', '02': '阴', '03': '阵雨', '04': '雷阵雨',
-    '05': '雷阵雨伴冰雹', '06': '雨夹雪', '07': '小雨', '08': '中雨',
-    '09': '大雨', '10': '暴雨', '11': '大暴雨', '12': '特大暴雨',
-    '13': '阵雪', '14': '小雪', '15': '中雪', '16': '大雪', '17': '暴雪',
-    '18': '雾', '19': '冻雨', '20': '沙尘暴', '21': '小雨到中雨',
-    '22': '中雨到大雨', '23': '大雨到暴雨', '24': '暴雨到大暴雨',
-    '25': '大暴雨到特大暴雨', '26': '小雪到中雪', '27': '中雪到大雪',
-    '28': '大雪到暴雪', '29': '浮尘', '30': '扬沙', '31': '强沙尘暴', '32': '霾',
-  };
-  return map[String(code)] || '';
+    '00': '晴', '01': '多云', '02': '阴', '03': '阵雨', '04': '雷阵雨', '05': '雷阵雨伴有冰雹',
+    '06': '雨夹雪', '07': '小雨', '08': '中雨', '09': '大雨', '10': '暴雨', '11': '大暴雨',
+    '12': '特大暴雨', '13': '阵雪', '14': '小雪', '15': '中雪', '16': '大雪', '17': '暴雪',
+    '18': '雾', '19': '冻雨', '20': '沙尘暴', '21': '小到中雨', '22': '中到大雨', '23': '大到暴雨',
+    '24': '暴雨到大暴雨', '25': '大暴雨到特大暴雨', '26': '小到中雪', '27': '中到大雪', '28': '大到暴雪',
+    '29': '浮尘', '30': '扬沙', '31': '强沙尘暴', '53': '霾', '32': '浓雾', '301': '雨', '302': '雪', '99': '',
+  }
+  return map[c] || ''
 }
 
-function iconFromText(text) {
-  const t = String(text || '');
-  if (t.includes('晴')) return { icon: 'sf-symbol:sun.max.fill', color: '#F5A623' };
-  if (t.includes('多云')) return { icon: 'sf-symbol:cloud.sun.fill', color: '#F5A623' };
-  if (t.includes('雷')) return { icon: 'sf-symbol:cloud.bolt.rain.fill', color: '#7D5FFF' };
-  if (t.includes('雪') || t.includes('雨夹雪')) return { icon: 'sf-symbol:cloud.snow.fill', color: '#A0D8FF' };
-  if (t.includes('雨')) return { icon: 'sf-symbol:cloud.rain.fill', color: '#4DA6F0' };
-  if (t.includes('雾') || t.includes('霾') || t.includes('沙') || t.includes('尘')) return { icon: 'sf-symbol:cloud.fog.fill', color: '#8E8E93' };
-  if (t.includes('阴')) return { icon: 'sf-symbol:cloud.fill', color: '#8E8E93' };
-  return { icon: 'sf-symbol:cloud.fill', color: '#8E8E93' };
+function weatherEmoji(code, night = false) {
+  const raw = clean(code)
+  if (!raw) return ''
+  const norm = raw.replace(/^[dn]/i, '')
+  if (/^\d{1,2}$/.test(norm)) {
+    const pad = norm.padStart(2, '0')
+    if (pad === '00') return night ? '🌙' : '☀️'
+    if (pad === '01') return night ? '☁️' : '🌤️'
+    if (pad === '02') return '☁️'
+    if (['04', '05'].includes(pad)) return '⛈️'
+    if (['03', '07', '08', '09', '10', '11', '12', '19', '21', '22', '23', '24', '25'].includes(pad)) return '🌧️'
+    if (['06', '13', '14', '15', '16', '17', '26', '27', '28'].includes(pad)) return '❄️'
+    if (['18', '20', '29', '30', '31', '32', '53'].includes(pad)) return '🌫️'
+  }
+  const text = codeToText(norm) || raw
+  if (/雷/.test(text)) return '⛈️'
+  if (/雨/.test(text)) return '🌧️'
+  if (/雪|冰雹/.test(text)) return '❄️'
+  if (/雾|霾|沙|尘/.test(text)) return '🌫️'
+  if (/多云/.test(text)) return night ? '☁️' : '🌤️'
+  if (/阴/.test(text)) return '☁️'
+  if (/晴/.test(text)) return night ? '🌙' : '☀️'
+  const c = Number(norm)
+  if (!Number.isFinite(c)) return '🌡️'
+  if (c === 100) return night ? '🌙' : '☀️'
+  if (c === 150 || c === 154) return '🌙'
+  if ([101, 102, 103].includes(c)) return night ? '☁️' : '🌤️'
+  if ([151, 152, 153].includes(c)) return '🌥️'
+  if (c === 104 || (c >= 800 && c <= 808)) return '☁️'
+  if (c >= 200 && c <= 213) return '🌬️'
+  if (c >= 300 && c <= 318) return [302, 303, 304, 310, 311, 312].includes(c) ? '⛈️' : '🌧️'
+  if (c >= 400 && c <= 499) return '❄️'
+  if (c >= 500 && c <= 518) return '🌫️'
+  if (c >= 600 && c <= 609) return '🌨️'
+  if (c >= 700 && c <= 718) return '🌫️'
+  return '🌡️'
 }
 
-function iconFromCode(code) {
-  const c = String(code || '');
-  if (c === '00') return { icon: 'sf-symbol:sun.max.fill', color: '#F5A623' };
-  if (c === '01') return { icon: 'sf-symbol:cloud.sun.fill', color: '#F5A623' };
-  if (c === '02') return { icon: 'sf-symbol:cloud.fill', color: '#8E8E93' };
-  if (['04', '05'].includes(c)) return { icon: 'sf-symbol:cloud.bolt.rain.fill', color: '#7D5FFF' };
-  if (['06', '13', '14', '15', '16', '17', '26', '27', '28'].includes(c)) return { icon: 'sf-symbol:cloud.snow.fill', color: '#A0D8FF' };
-  if (['03', '07', '08', '21'].includes(c)) return { icon: 'sf-symbol:cloud.rain.fill', color: '#4DA6F0' };
-  if (['09', '10', '11', '12', '22', '23', '24', '25'].includes(c)) return { icon: 'sf-symbol:cloud.heavyrain.fill', color: '#2E86DE' };
-  if (['18', '19', '20', '29', '30', '31', '32'].includes(c)) return { icon: 'sf-symbol:cloud.fog.fill', color: '#8E8E93' };
-  return { icon: 'sf-symbol:cloud.fill', color: '#8E8E93' };
-}
-
-function renderError(msg) {
+function dateFestival(data) {
+  const iso = baseDate(data)
+  if (!iso) return { date: '日期未知', festival: '' }
+  const [y, m, d] = iso.split('-').map(Number)
+  const local = new Date(y, m - 1, d, 12)
+  const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][local.getDay()]
+  const candidates = [getNextFestivalInfo(local), getNextLunarFestivalInfo(local)]
+    .filter(x => !!x && x.daysLeft >= 0 && x.daysLeft <= 14)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+  const next = candidates[0]
   return {
-    type: 'widget',
-    padding: 14,
-    gap: 8,
-    children: [
-      { type: 'text', text: '中国天气网', font: { size: 'headline', weight: 'bold' }, textColor: '#FF3B30', maxLines: 1 },
-      { type: 'text', text: msg, font: { size: 'caption1' }, textColor: '#666666', maxLines: 3 },
-    ],
-  };
+    date: `${m}月${d}日 · ${weekday}`,
+    festival: !next ? '' : next.daysLeft === 0 ? `今日${next.name}` : `距${next.name} ${next.daysLeft}天`,
+  }
 }
 
-function getNextHoliday() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const holidays = [
-    { m: 1, d: 1, name: '元旦' },
-    { m: 2, d: 17, name: '春节', y: 2026 }, { m: 2, d: 6, name: '春节', y: 2027 },
-    { m: 3, d: 3, name: '元宵节', y: 2026 },
-    { m: 5, d: 1, name: '劳动节' },
-    { m: 6, d: 19, name: '端午节', y: 2026 }, { m: 6, d: 9, name: '端午节', y: 2027 },
-    { m: 8, d: 19, name: '七夕节', y: 2026 },
-    { m: 9, d: 25, name: '中秋节', y: 2026 }, { m: 9, d: 15, name: '中秋节', y: 2027 },
-    { m: 10, d: 18, name: '重阳节', y: 2026 },
-    { m: 10, d: 1, name: '国庆节' },
-    { m: 12, d: 25, name: '圣诞节' },
-    { m: 2, d: 4, name: '立春' }, { m: 2, d: 19, name: '雨水' },
-    { m: 3, d: 5, name: '惊蛰' }, { m: 3, d: 20, name: '春分' },
-    { m: 4, d: 4, name: '清明' }, { m: 4, d: 20, name: '谷雨' },
-    { m: 5, d: 5, name: '立夏' }, { m: 5, d: 21, name: '小满' },
-    { m: 6, d: 5, name: '芒种' }, { m: 6, d: 21, name: '夏至' },
-    { m: 7, d: 7, name: '小暑' }, { m: 7, d: 22, name: '大暑' },
-    { m: 8, d: 7, name: '立秋' }, { m: 8, d: 23, name: '处暑' },
-    { m: 9, d: 7, name: '白露' }, { m: 9, d: 23, name: '秋分' },
-    { m: 10, d: 8, name: '寒露' }, { m: 10, d: 23, name: '霜降' },
-    { m: 11, d: 7, name: '立冬' }, { m: 11, d: 22, name: '小雪' },
-    { m: 12, d: 7, name: '大雪' }, { m: 12, d: 21, name: '冬至' },
-    { m: 1, d: 5, name: '小寒' }, { m: 1, d: 20, name: '大寒' },
-  ];
-  let best = null;
-  for (const h of holidays) {
-    for (const yy of [y, y + 1]) {
-      if (h.y && h.y !== yy) continue;
-      const dt = new Date(yy, h.m - 1, h.d);
-      const days = Math.ceil((dt - now) / 86400000);
-      if (days >= 0 && (!best || days < best.days)) {
-        best = { name: h.name, days };
+// ─── Egern Widget DSL 组件构建 ───
+function createContainer(isRoot = false) {
+  const node = isRoot
+    ? {
+        type: 'widget',
+        backgroundColor: COLORS.bgTop(),
+        backgroundGradient: widgetBackgroundGradient(),
+        refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        children: [],
       }
+    : {
+        type: 'stack',
+        direction: 'row',
+        children: [],
+      }
+
+  const wrapper = {
+    _node: node,
+    layoutHorizontally() {
+      node.direction = 'row'
+    },
+    layoutVertically() {
+      node.direction = 'column'
+    },
+    centerAlignContent() {
+      node.alignItems = 'center'
+    },
+    setPadding(top, leading, bottom, trailing) {
+      node.padding = [top, leading, bottom, trailing]
+    },
+    set backgroundColor(val) {
+      node.backgroundColor = val
+    },
+    set cornerRadius(val) {
+      node.borderRadius = val
+    },
+    addSpacer(len) {
+      const sp = { type: 'spacer' }
+      if (typeof len === 'number') sp.length = len
+      node.children.push(sp)
+      return sp
+    },
+    addStack() {
+      const child = createContainer(false)
+      node.children.push(child._node)
+      return child
+    },
+    addNode(rawNode) {
+      if (rawNode) node.children.push(rawNode)
+      return rawNode
+    },
+    toDSL() {
+      return node
+    },
+  }
+  return wrapper
+}
+
+function addText(parent, str, opts = {}) {
+  const size = opts.size || 10
+  const font = { size }
+  if (opts.weight) font.weight = opts.weight
+  if (opts.monospaced) font.family = 'Menlo'
+  const t = {
+    type: 'text',
+    text: String(str),
+    font,
+    maxLines: opts.lineLimit != null ? opts.lineLimit : 1,
+  }
+  if (opts.color) t.textColor = opts.color
+  if (opts.minScale) t.minScale = opts.minScale
+  return parent.addNode(t)
+}
+
+function addSymbol(parent, name, size, tintColor) {
+  const s = Math.round(size + 2)
+  const img = {
+    type: 'image',
+    src: `sf-symbol:${name || 'questionmark.circle'}`,
+    width: s,
+    height: s,
+  }
+  if (tintColor) img.color = tintColor
+  return parent.addNode(img)
+}
+
+function addWeatherIcon(parent, code, size, night = false) {
+  const emoji = weatherEmoji(code, night)
+  if (emoji) {
+    return addText(parent, emoji, { size, lineLimit: 1 })
+  }
+  return addText(parent, '—', { size: Math.round(size * 0.65), color: COLORS.quiet(), lineLimit: 1 })
+}
+
+function addProgressBar(parent, width, height, ratio, trackColor, fillColor) {
+  const w = Math.max(4, Math.round(width))
+  const h = Math.max(2, Math.round(height))
+  const r = h / 2
+  const clamped = ratio != null && ratio > 0 ? Math.max(0, Math.min(1, ratio)) : 0
+  const fw = clamped > 0 ? Math.max(h, Math.min(w, Math.round(w * clamped))) : 0
+  const bar = {
+    type: 'stack',
+    direction: 'row',
+    alignItems: 'center',
+    width: w,
+    height: h,
+    borderRadius: r,
+    backgroundColor: trackColor,
+    children:
+      fw > 0
+        ? [
+            {
+              type: 'stack',
+              width: fw,
+              height: h,
+              borderRadius: r,
+              backgroundColor: fillColor,
+              children: [],
+            },
+            ...(fw < w ? [{ type: 'spacer' }] : []),
+          ]
+        : [],
+  }
+  return parent.addNode(bar)
+}
+
+function addHeader(parent, data) {
+  const row = parent.addStack()
+  row.layoutHorizontally()
+  row.centerAlignContent()
+  addSymbol(row, 'location.fill', 8, COLORS.blue())
+  row.addSpacer(3)
+  addText(row, clean(data.place) || '当前位置', {
+    size: 9,
+    weight: 'semibold',
+    color: COLORS.blue(),
+    minScale: 0.72,
+  })
+  row.addSpacer()
+  if (data.partial && data.partial.length) {
+    addText(row, '部分数据缺失', { size: 7.5, color: COLORS.amber() })
+    row.addSpacer(4)
+  }
+  addText(row, updated(data), {
+    size: 8,
+    color: data.stale ? COLORS.amber() : COLORS.quiet(),
+    monospaced: true,
+  })
+}
+
+function addHumidity(parent, data, width = 64) {
+  const raw = numeric(data.now.humidity)
+  const humidity = raw == null ? undefined : Math.max(0, Math.min(100, raw))
+  const row = parent.addStack()
+  row.layoutHorizontally()
+  row.centerAlignContent()
+  addSymbol(row, 'drop.fill', 8, COLORS.blue())
+  row.addSpacer(4)
+  addText(row, '湿度', { size: 9, color: COLORS.secondary() })
+  row.addSpacer(4)
+  addText(row, humidity == null ? '—' : `${Math.round(humidity)}%`, {
+    size: 9,
+    weight: 'medium',
+    color: COLORS.blue(),
+    monospaced: true,
+  })
+  row.addSpacer()
+  addProgressBar(row, width, 4, humidity != null ? humidity / 100 : 0, COLORS.track(), COLORS.blue())
+}
+
+function addHighLow(parent, data, size = 10) {
+  const day = getToday(data)
+  const row = parent.addStack()
+  row.layoutHorizontally()
+  row.centerAlignContent()
+  addText(row, `高 ${temp(day && day.tempMax)}`, {
+    size,
+    weight: 'semibold',
+    color: COLORS.highColor(),
+    monospaced: true,
+  })
+  row.addSpacer(5)
+  addText(row, `低 ${temp(day && day.tempMin)}`, {
+    size,
+    color: COLORS.lowColor(),
+    monospaced: true,
+  })
+}
+
+function addDateFestival(parent, data, compact = false) {
+  const info = dateFestival(data)
+  const col = parent.addStack()
+  col.layoutVertically()
+  col.centerAlignContent()
+  addText(col, info.date, {
+    size: compact ? 8.5 : 9.5,
+    weight: 'semibold',
+    color: COLORS.secondary(),
+    minScale: 0.7,
+  })
+  if (info.festival) {
+    col.addSpacer(1)
+    addText(col, info.festival, {
+      size: compact ? 7.5 : 8.5,
+      weight: 'semibold',
+      color: COLORS.highColor(),
+      minScale: 0.68,
+    })
+  }
+}
+
+function addHero(parent, data, opts = {}) {
+  const large = !!opts.large
+  const compact = !!opts.compact
+  const row = parent.addStack()
+  row.layoutHorizontally()
+  row.centerAlignContent()
+
+  addText(row, temp(data.now.temp), {
+    size: large ? 46 : compact ? 36 : 40,
+    weight: 'bold',
+    color: COLORS.ink(),
+    monospaced: true,
+    minScale: 0.7,
+  })
+  row.addSpacer(compact ? 4 : 8)
+  addWeatherIcon(row, data.now.icon, large ? 38 : compact ? 28 : 32, isNight(data))
+  row.addSpacer()
+  addDateFestival(row, data, compact)
+  row.addSpacer()
+
+  const right = row.addStack()
+  right.layoutVertically()
+  const condRow = right.addStack()
+  condRow.layoutHorizontally()
+  condRow.addSpacer()
+  addText(condRow, clean(data.now.text) || '实况暂缺', {
+    size: large ? 13 : 11,
+    weight: 'medium',
+    color: COLORS.ink(),
+    minScale: 0.7,
+  })
+  right.addSpacer(compact ? 2 : 4)
+  const hlRow = right.addStack()
+  hlRow.layoutHorizontally()
+  hlRow.addSpacer()
+  addHighLow(hlRow, data, large ? 11 : compact ? 9 : 10)
+}
+
+function addForecast(parent, data, compact = false) {
+  const days = getForecast(data)
+  const row = parent.addStack()
+  row.layoutHorizontally()
+  row.centerAlignContent()
+  if (!days.length) {
+    addText(row, '未来五天预报暂缺', { size: 10, color: COLORS.secondary() })
+    return
+  }
+  days.forEach(({ date, day }, i) => {
+    if (i > 0) row.addSpacer()
+    const col = row.addStack()
+    col.layoutVertically()
+    col.centerAlignContent()
+    addText(col, i === 0 ? '明天' : dayLabel(date), {
+      size: compact ? 8.5 : 9,
+      weight: i === 0 ? 'semibold' : 'medium',
+      color: i === 0 ? COLORS.blue() : COLORS.secondary(),
+    })
+    col.addSpacer(compact ? 2 : 3)
+    if (compact) {
+      const mid = col.addStack()
+      mid.layoutHorizontally()
+      mid.centerAlignContent()
+      addWeatherIcon(mid, day && day.iconDay, 13, false)
+      mid.addSpacer(2)
+      const p = clean(day && day.precip)
+      const shortWea = clean(day && day.textDay).replace(/转.*$/, '').slice(0, 3)
+      addText(mid, p ? `${p}mm` : (shortWea || '—'), {
+        size: 7.5,
+        color: p && Number(p) > 0 ? COLORS.cyan() : COLORS.quiet(),
+        monospaced: Boolean(p),
+      })
+    } else {
+      addWeatherIcon(col, day && day.iconDay, 15, false)
     }
-  }
-  return best;
+    col.addSpacer(compact ? 2 : 3)
+    const temps = col.addStack()
+    temps.layoutHorizontally()
+    temps.centerAlignContent()
+    addText(temps, temp(day && day.tempMax), {
+      size: compact ? 9 : 9.5,
+      weight: 'semibold',
+      color: COLORS.highColor(),
+      monospaced: true,
+    })
+    temps.addSpacer(3)
+    addText(temps, temp(day && day.tempMin), {
+      size: compact ? 9 : 9.5,
+      color: COLORS.lowColor(),
+      monospaced: true,
+    })
+  })
 }
 
-function renderSmall(m) {
-  const { icon, color: iconColor } = iconFromText(m.weather);
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  const header = {
-    type: 'stack', direction: 'row', alignItems: 'center',
-    children: [
-      ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 14, height: 14, color: '#007AFF' }, { type: 'spacer', length: 4 }] : []),
-      { type: 'text', text: m.city, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
-      m.aqi ? { type: 'text', text: `  AQI ${m.aqi}`, font: { size: 11 }, textColor: S, maxLines: 1 } : { type: 'spacer', length: 0 },
-      { type: 'spacer' },
-      { type: 'image', src: icon, width: 28, height: 28, color: iconColor },
-    ],
-  };
-  const today = m.daily && m.daily[0];
-  const todayRow = {
-    type: 'stack', direction: 'row', alignItems: 'center',
-    children: [
-      { type: 'text', text: `${m.temp ? Math.round(parseFloat(m.temp)) : '--'}°`, font: { size: 38, weight: 'bold' }, textColor: T, maxLines: 1 },
-      { type: 'spacer' },
-      today ? { type: 'text', text: `${today.tempMin}°`, font: { size: 20 }, textColor: S, maxLines: 1 } : { type: 'spacer', length: 0 },
-      today ? { type: 'spacer', length: 12 } : { type: 'spacer', length: 0 },
-      today ? { type: 'text', text: `${today.tempMax}°`, font: { size: 20, weight: 'semibold' }, textColor: T, maxLines: 1 } : { type: 'spacer', length: 0 },
-    ],
-  };
-  const rows = [];
-  const labels = ['明天'];
-  for (let i = 1; i < 3 && m.daily && m.daily[i]; i++) {
-    const d = m.daily[i];
-    const label = labels[i - 1] || d.week;
-    const { icon: dic, color: dcolor } = iconFromCode(d.codeDay);
-    rows.push({ type: 'spacer', length: 6 });
-    rows.push({
-      type: 'stack', direction: 'row', alignItems: 'center',
-      children: [
-        { type: 'text', text: label, font: { size: 16 }, textColor: T, width: 44, maxLines: 1 },
-        { type: 'image', src: dic, width: 22, height: 22, color: dcolor },
-        { type: 'spacer' },
-        { type: 'text', text: `${d.tempMin}°`, font: { size: 17 }, textColor: S, maxLines: 1 },
-        { type: 'spacer', length: 12 },
-        { type: 'text', text: `${d.tempMax}°`, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
-      ],
-    });
-  }
-  return {
-    type: 'widget',
-    padding: 14,
-    refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    children: [header, { type: 'spacer', length: 4 }, todayRow, ...rows, { type: 'spacer' }],
-  };
+function addDetailChip(parent, symbol, value, tint, textColor) {
+  const chip = parent.addStack()
+  chip.layoutHorizontally()
+  chip.centerAlignContent()
+  addSymbol(chip, symbol, 8, tint || COLORS.blue())
+  chip.addSpacer(3)
+  addText(chip, value, {
+    size: 8.3,
+    weight: 'medium',
+    color: textColor || COLORS.secondary(),
+    minScale: 0.7,
+  })
 }
 
-function renderMedium(m) {
-  const { icon, color: iconColor } = iconFromText(m.weather);
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const nowT = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const timeStr = `${nowT.getFullYear()}-${pad(nowT.getMonth() + 1)}-${pad(nowT.getDate())} ${pad(nowT.getHours())}:${pad(nowT.getMinutes())}`;
-  const today = m.daily && m.daily[0];
-  const hlText = today ? `H:${today.tempMax}° L:${today.tempMin}°` : '';
-  const humidity = Math.max(0, Math.min(100, parseInt(String(m.humidity).replace('%', ''), 10) || 0));
-  const barW = 300, barH = 10;
-  const fillW = Math.round(barW * humidity / 100);
-  const dotX = Math.max(6, Math.min(barW - 6, fillW));
-  const humiditySvg =
-    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${barW} ${barH}' preserveAspectRatio='none'>` +
-    `<defs><linearGradient id='hg' x1='0' y1='0' x2='1' y2='0'>` +
-    `<stop offset='0' stop-color='%2334C759'/><stop offset='0.35' stop-color='%23FFCC00'/>` +
-    `<stop offset='0.55' stop-color='%23FF9500'/><stop offset='0.75' stop-color='%23FF3B30'/>` +
-    `<stop offset='1' stop-color='%23AF52DE'/></linearGradient></defs>` +
-    `<rect x='0' y='1' width='${barW}' height='${barH - 2}' rx='${(barH - 2) / 2}' fill='url(%23hg)' opacity='0.25'/>` +
-    `<rect x='0' y='1' width='${fillW}' height='${barH - 2}' rx='${(barH - 2) / 2}' fill='url(%23hg)'/>` +
-    `<circle cx='${dotX}' cy='${barH / 2}' r='5' fill='%23FFFFFF' opacity='0.95'/>` +
-    `</svg>`;
-  const forecastCells = [];
-  for (let i = 0; i <= 6 && m.daily && m.daily[i]; i++) {
-    const d = m.daily[i];
-    const { icon: dic, color: dcolor } = iconFromCode(d.codeDay);
-    forecastCells.push({
-      type: 'stack', direction: 'column', alignItems: 'center', gap: 2, flex: 1,
-      children: [
-        { type: 'text', text: d.week, font: { size: 11 }, textColor: S, maxLines: 1 },
-        { type: 'image', src: dic, width: 20, height: 20, color: dcolor },
-        { type: 'text', text: `${d.tempMax}°`, font: { size: 12, weight: 'semibold' }, textColor: T, maxLines: 1 },
-      ],
-    });
-  }
-  const hrLine = {
-    type: 'text', text: ' ',
-    font: { size: 1 },
-    backgroundColor: { light: '#00000018', dark: '#FFFFFF20' },
-  };
-  const holiday = getNextHoliday();
-  const holidayBlock = holiday ? {
-    type: 'stack', direction: 'column', alignItems: 'center', gap: 0,
-    children: [
-      { type: 'text', text: `距离${holiday.name}`, font: { size: 11, weight: 'semibold' }, textColor: { light: '#FF3B30', dark: '#FF6B62' }, maxLines: 1 },
-      { type: 'text', text: holiday.days === 0 ? '就是今天' : `还有${holiday.days}天`, font: { size: 11 }, textColor: S, maxLines: 1 },
-    ],
-  } : { type: 'spacer' };
-  const infoRow = {
-    type: 'stack', direction: 'row', alignItems: 'center',
-    children: [
-      { type: 'spacer' },
-      { type: 'text', text: `${m.windDir} ${m.windScale} · 降水 ${m.rain}mm · 能见度 ${m.vis} · AQI ${m.aqi}`, font: { size: 10 }, textColor: S, maxLines: 1 },
-      { type: 'spacer' },
-    ],
-  };
-  return {
-    type: 'widget',
-    padding: 10,
-    gap: 3,
-    refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    children: [
-      {
-        type: 'stack', direction: 'row', alignItems: 'center',
-        children: [
-          { type: 'image', src: icon, width: 36, height: 36, color: iconColor },
-          { type: 'spacer', length: 8 },
-          {
-            type: 'stack', direction: 'column', gap: 1, alignItems: 'start',
-            children: [
-              {
-                type: 'stack', direction: 'row', alignItems: 'center', gap: 3,
-                children: [
-                  ...(m.isAuto ? [{ type: 'image', src: 'sf-symbol:location.fill', width: 15, height: 15, color: '#007AFF' }, { type: 'spacer', length: 8 }] : []),
-                  { type: 'text', text: m.city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
-                ],
-              },
-              {
-                type: 'stack', direction: 'row', alignItems: 'center',
-                children: [
-                  ...(m.isAuto ? [{ type: 'spacer', length: 23 }] : []),
-                  { type: 'text', text: m.weather, font: { size: 13 }, textColor: T, maxLines: 1 },
-                ],
-              },
-              { type: 'text', text: timeStr, font: { size: 10 }, textColor: S, maxLines: 1 },
-            ],
-          },
-          { type: 'spacer' },
-          holidayBlock,
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
-            children: [
-              { type: 'text', text: `${m.temp}°C`, font: { size: 30, weight: 'bold' }, textColor: T, maxLines: 1, minScale: 0.7 },
-              { type: 'text', text: hlText, font: { size: 12 }, textColor: S, maxLines: 1 },
-            ],
-          },
-        ],
-      },
-      infoRow,
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
-        children: [
-          { type: 'text', text: '相对湿度', font: { size: 12 }, textColor: T, maxLines: 1 },
-          { type: 'image', src: `data:image/svg+xml,${humiditySvg}`, flex: 1, height: 10 },
-          { type: 'text', text: `${humidity}%`, font: { size: 12, weight: 'semibold' }, textColor: T, maxLines: 1 },
-        ],
-      },
-      hrLine,
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', flex: 1,
-        children: forecastCells.length > 0 ? forecastCells : [{ type: 'spacer' }],
-      },
-    ],
-  };
+function addHumidityDetail(parent, data) {
+  const raw = numeric(data.now.humidity)
+  const humidity = raw == null ? undefined : Math.max(0, Math.min(100, raw))
+  const row = parent.addStack()
+  row.layoutHorizontally()
+  row.centerAlignContent()
+  addSymbol(row, 'drop.fill', 8, COLORS.teal())
+  row.addSpacer(3)
+  addText(row, humidity == null ? '湿度—' : `湿度${Math.round(humidity)}%`, {
+    size: 8.3,
+    weight: 'medium',
+    color: COLORS.teal(),
+    monospaced: true,
+  })
+  row.addSpacer(3)
+  addProgressBar(row, 25, 3, humidity != null ? humidity / 100 : 0, COLORS.tealTrack(), COLORS.teal())
 }
 
-function buildClockSVG(hour, minute, second) {
-  const cx = 100, cy = 100, r = 92;
-  let ticks = '';
-  for (let i = 0; i < 60; i++) {
-    const a = (i * 6 - 90) * Math.PI / 180;
-    const isHour = i % 5 === 0;
-    const r1 = isHour ? r - 14 : r - 8;
-    const x1 = cx + r1 * Math.cos(a), y1 = cy + r1 * Math.sin(a);
-    const x2 = cx + r * Math.cos(a), y2 = cy + r * Math.sin(a);
-    ticks += `<line x1='${x1.toFixed(1)}' y1='${y1.toFixed(1)}' x2='${x2.toFixed(1)}' y2='${y2.toFixed(1)}' stroke='%23333' stroke-width='${isHour ? 3 : 1.5}'/>`;
+function addMediumDetails(parent, data) {
+  const wind = [clean(data.now.windDir), clean(data.now.windScale) ? `${clean(data.now.windScale)}级` : ''].filter(Boolean).join(' ') || '风力 —'
+  const aqi = data.aqi && clean(data.aqi.value) ? `AQI ${clean(data.aqi.label)} ${clean(data.aqi.value)}` : 'AQI —'
+  const precip = clean(data.now.precip)
+  const warning = clean(data.warnings && data.warnings[0] && data.warnings[0].title)
+  const aqiColor = data.aqi && data.aqi.label === '优' ? COLORS.green() : COLORS.amber()
+
+  const col = parent.addStack()
+  col.layoutVertically()
+
+  const row1 = col.addStack()
+  row1.layoutHorizontally()
+  row1.centerAlignContent()
+  addDetailChip(row1, 'thermometer.medium', `体感 ${temp(data.now.feelsLike)}`, COLORS.warm(), COLORS.warm())
+  row1.addSpacer()
+  addDetailChip(row1, 'wind', wind, COLORS.teal(), COLORS.teal())
+  row1.addSpacer()
+  addDetailChip(row1, 'aqi.medium', aqi, aqiColor, aqiColor)
+
+  col.addSpacer(3)
+  const row2 = col.addStack()
+  row2.layoutHorizontally()
+  row2.centerAlignContent()
+  addDetailChip(row2, 'eye', `能见度 ${unit(data.now.vis, 'km')}`, COLORS.violet(), COLORS.violet())
+  row2.addSpacer()
+  addDetailChip(row2, 'cloud.rain.fill', `降水 ${precip ? `${precip}mm` : '—'}`, COLORS.cyan(), COLORS.cyan())
+  row2.addSpacer()
+  addHumidityDetail(row2, data)
+
+  if (warning) {
+    col.addSpacer(3)
+    const wRow = col.addStack()
+    wRow.layoutHorizontally()
+    wRow.centerAlignContent()
+    addSymbol(wRow, 'exclamationmark.triangle.fill', 8, COLORS.amber())
+    wRow.addSpacer(3)
+    addText(wRow, `${warning}${data.warnings.length > 1 ? ` · 共${data.warnings.length}条` : ''}`, {
+      size: 8.2,
+      weight: 'semibold',
+      color: COLORS.amber(),
+      minScale: 0.62,
+    })
   }
-  let nums = '';
-  for (let n = 1; n <= 12; n++) {
-    const a = (n * 30 - 90) * Math.PI / 180;
-    const x = cx + (r - 28) * Math.cos(a), y = cy + (r - 28) * Math.sin(a);
-    nums += `<text x='${x.toFixed(1)}' y='${(y + 7).toFixed(1)}' text-anchor='middle' font-size='20' font-weight='600' fill='%23333'>${n}</text>`;
-  }
-  const ha = ((hour % 12) * 30 + minute * 0.5 - 90) * Math.PI / 180;
-  const ma = (minute * 6 - 90) * Math.PI / 180;
-  const sa = (second * 6 - 90) * Math.PI / 180;
-  const hx = cx + 45 * Math.cos(ha), hy = cy + 45 * Math.sin(ha);
-  const mx = cx + 68 * Math.cos(ma), my = cy + 68 * Math.sin(ma);
-  const sx = cx + 75 * Math.cos(sa), sy = cy + 75 * Math.sin(sa);
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
-    `<circle cx='100' cy='100' r='96' fill='none' stroke='%23999' stroke-width='2'/>` +
-    ticks + nums +
-    `<line x1='100' y1='100' x2='${hx.toFixed(1)}' y2='${hy.toFixed(1)}' stroke='%23333' stroke-width='7' stroke-linecap='round'/>` +
-    `<line x1='100' y1='100' x2='${mx.toFixed(1)}' y2='${my.toFixed(1)}' stroke='%23333' stroke-width='5' stroke-linecap='round'/>` +
-    `<line x1='100' y1='100' x2='${sx.toFixed(1)}' y2='${sy.toFixed(1)}' stroke='%23FF9500' stroke-width='2.5' stroke-linecap='round'/>` +
-    `<circle cx='100' cy='100' r='7' fill='%23FF9500'/>` +
-    `</svg>`;
-  return 'data:image/svg+xml,' + svg;
 }
 
-function getGreeting(hour) {
-  if (hour >= 5 && hour < 9) return '早晨好';
-  if (hour >= 9 && hour < 12) return '上午好';
-  if (hour >= 12 && hour < 14) return '中午好';
-  if (hour >= 14 && hour < 18) return '下午好';
-  if (hour >= 18 && hour < 23) return '晚上好';
-  return '夜深了';
+function addMetric(parent, symbol, label, value) {
+  const col = parent.addStack()
+  col.layoutVertically()
+  const top = col.addStack()
+  top.layoutHorizontally()
+  top.centerAlignContent()
+  addSymbol(top, symbol, 9, COLORS.blue())
+  top.addSpacer(4)
+  addText(top, label, { size: 9, color: COLORS.secondary() })
+  col.addSpacer(4)
+  addText(col, value, {
+    size: 11,
+    weight: 'semibold',
+    color: COLORS.ink(),
+    minScale: 0.75,
+  })
 }
 
-function getNextTwoHolidays() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const holidays = [
-    { m: 1, d: 1, name: '元旦' },
-    { m: 2, d: 17, name: '春节', y: 2026 }, { m: 2, d: 6, name: '春节', y: 2027 },
-    { m: 3, d: 3, name: '元宵节', y: 2026 },
-    { m: 5, d: 1, name: '劳动节' },
-    { m: 6, d: 19, name: '端午节', y: 2026 }, { m: 6, d: 9, name: '端午节', y: 2027 },
-    { m: 8, d: 19, name: '七夕节', y: 2026 },
-    { m: 9, d: 25, name: '中秋节', y: 2026 }, { m: 9, d: 15, name: '中秋节', y: 2027 },
-    { m: 10, d: 18, name: '重阳节', y: 2026 },
-    { m: 10, d: 1, name: '国庆节' },
-    { m: 12, d: 25, name: '圣诞节' },
-    { m: 2, d: 4, name: '立春' }, { m: 2, d: 19, name: '雨水' },
-    { m: 3, d: 5, name: '惊蛰' }, { m: 3, d: 20, name: '春分' },
-    { m: 4, d: 4, name: '清明' }, { m: 4, d: 20, name: '谷雨' },
-    { m: 5, d: 5, name: '立夏' }, { m: 5, d: 21, name: '小满' },
-    { m: 6, d: 5, name: '芒种' }, { m: 6, d: 21, name: '夏至' },
-    { m: 7, d: 7, name: '小暑' }, { m: 7, d: 22, name: '大暑' },
-    { m: 8, d: 7, name: '立秋' }, { m: 8, d: 23, name: '处暑' },
-    { m: 9, d: 7, name: '白露' }, { m: 9, d: 23, name: '秋分' },
-    { m: 10, d: 8, name: '寒露' }, { m: 10, d: 23, name: '霜降' },
-    { m: 11, d: 7, name: '立冬' }, { m: 11, d: 22, name: '小雪' },
-    { m: 12, d: 7, name: '大雪' }, { m: 12, d: 21, name: '冬至' },
-    { m: 1, d: 5, name: '小寒' }, { m: 1, d: 20, name: '大寒' },
-  ];
-  const list = [];
-  for (const h of holidays) {
-    for (const yy of [y, y + 1]) {
-      if (h.y && h.y !== yy) continue;
-      const dt = new Date(yy, h.m - 1, h.d);
-      const days = Math.ceil((dt - now) / 86400000);
-      if (days >= 0) list.push({ name: h.name, days, dt });
-    }
-  }
-  list.sort((a, b) => a.days - b.days);
-  const seen = new Set();
-  const out = [];
-  for (const it of list) {
-    if (seen.has(it.name)) continue;
-    seen.add(it.name);
-    out.push({ name: it.name, md: `${String(it.dt.getMonth() + 1).padStart(2, '0')}-${String(it.dt.getDate()).padStart(2, '0')}` });
-    if (out.length >= 2) break;
-  }
-  return out;
+function addHours(parent, data) {
+  const hours = (data.hourly || []).slice(0, 6)
+  if (!hours.length) return false
+
+  const box = parent.addStack()
+  box.layoutHorizontally()
+  box.centerAlignContent()
+  box.backgroundColor = COLORS.panel()
+  box.cornerRadius = 12
+  box.setPadding(7, 8, 7, 8)
+
+  hours.forEach((h, idx) => {
+    if (idx > 0) box.addSpacer()
+    const col = box.addStack()
+    col.layoutVertically()
+    col.centerAlignContent()
+    const hStr = h.hourText ? String(h.hourText).slice(0, 2) : String(h.fxTime).slice(11, 13)
+    const hr = Number(hStr)
+    addText(col, `${hStr}时`, { size: 9, color: COLORS.secondary() })
+    col.addSpacer(3)
+    addWeatherIcon(col, h.icon, 15, /^n/i.test(String(h.icon || '')) || hr < 6 || hr >= 18)
+    col.addSpacer(3)
+    addText(col, temp(h.temp), {
+      size: 10,
+      weight: 'semibold',
+      color: COLORS.ink(),
+      monospaced: true,
+    })
+  })
+  return true
 }
 
-function renderLarge(m, userName) {
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const { icon, color } = iconFromText(m.weather);
-  const d = new Date();
-  const clockSrc = buildClockSVG(d.getHours(), d.getMinutes(), d.getSeconds());
-  const greeting = getGreeting(d.getHours());
-  const schedules = getNextTwoHolidays();
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  const weekNames = ['一', '二', '三', '四', '五', '六', '日'];
-  const weekCells = [];
-  for (let i = 0; i < 7; i++) {
-    const wd = new Date(monday);
-    wd.setDate(monday.getDate() + i);
-    const isToday = wd.getDate() === d.getDate() && wd.getMonth() === d.getMonth();
-    weekCells.push({
-      type: 'stack', direction: 'column', alignItems: 'center', flex: 1, gap: 1,
-      children: [
-        { type: 'text', text: weekNames[i], font: { size: 10 }, textColor: S, maxLines: 1 },
-        {
-          type: 'stack', alignItems: 'center',
-          ...(isToday ? { backgroundColor: { light: '#FF3B3025', dark: '#FF453A30' } } : {}),
-          borderRadius: 10, padding: [3, 10, 3, 10],
-          children: [
-            { type: 'text', text: String(wd.getDate()), font: { size: 15, weight: 'semibold' },
-              textColor: isToday ? { light: '#FF3B30', dark: '#FF453A' } : T, maxLines: 1 },
-          ],
-        },
-      ],
-    });
-  }
-  const today = m.daily && m.daily[0];
-  const tomorrow = m.daily && m.daily[1];
-  const dayAfter = m.daily && m.daily[2];
-  const dayCard = (label, dayInfo) => {
-    if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
-    const s2 = iconFromCode(dayInfo.codeDay);
-    return {
-      type: 'stack', direction: 'row', alignItems: 'center', flex: 1, gap: 6,
-      children: [
-        { type: 'text', text: label, font: { size: 13 }, textColor: S, maxLines: 1 },
-        { type: 'image', src: s2.icon, width: 22, height: 22, color: s2.color },
-        { type: 'text', text: `${dayInfo.tempMin}°-${dayInfo.tempMax}°`, font: { size: 13, weight: 'semibold' }, textColor: T, maxLines: 1 },
-      ],
-    };
-  };
-  const lifeRow = {
-    type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
-    children: m.life.length > 0 ? m.life.map((item) => ({
-      type: 'stack', direction: 'column', flex: 1, gap: 2,
-      padding: [6, 8, 6, 8],
-      backgroundColor: '#FFFFFF15',
-      borderRadius: 10,
-      children: [
-        { type: 'text', text: item.label, font: { size: 11 }, textColor: S, maxLines: 1 },
-        { type: 'text', text: item.hint, font: { size: 13, weight: 'semibold' }, textColor: T, maxLines: 1, minScale: 0.7 },
-      ],
-    })) : [{ type: 'spacer' }],
-  };
-  return {
-    type: 'widget',
-    padding: [12, 12, 4, 12],
-    gap: 8,
-    refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    children: [
-      {
-        type: 'stack', direction: 'row', alignItems: 'center',
-        children: [
-          {
-            type: 'stack', direction: 'column', gap: 4, alignItems: 'start',
-            children: [
-              { type: 'text', text: `${d.getFullYear()} ${d.getMonth() + 1}月`, font: { size: 22, weight: 'bold' }, textColor: T, maxLines: 1 },
-              {
-                type: 'stack',
-                backgroundColor: { light: '#AF52DE25', dark: '#BF5AF230' },
-                borderRadius: 6, padding: [2, 8, 2, 8],
-                children: [{ type: 'text', text: '日程', font: { size: 12, weight: 'bold' },
-                  textColor: { light: '#AF52DE', dark: '#BF5AF2' }, maxLines: 1 }],
-              },
-              ...schedules.map((s2, i) => ({
-                type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
-                children: [
-                  { type: 'stack', width: 3, height: 28,
-                    backgroundColor: i === 0 ? { light: '#34C75960', dark: '#30D15860' } : { light: '#FF950060', dark: '#FF9F0A60' },
-                    borderRadius: 2 },
-                  { type: 'text', text: `${s2.name} ${s2.md}`, font: { size: 13 }, textColor: T, maxLines: 1 },
-                ],
-              })),
-            ],
-          },
-          { type: 'spacer' },
-          { type: 'image', src: clockSrc, width: 88, height: 88 },
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'center',
-            children: [
-              { type: 'text', text: String(d.getDate()), font: { size: 68, weight: 'bold' }, textColor: T, maxLines: 1 },
-              { type: 'text', text: userName ? `${userName}，${greeting}！` : greeting + '!', font: { size: 14, weight: 'semibold' }, textColor: S, maxLines: 1 },
-            ],
-          },
-        ],
-      },
-      { type: 'stack', direction: 'row', gap: 4, children: weekCells },
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
-        children: [
-          { type: 'image', src: icon, width: 36, height: 36, color },
-          { type: 'text', text: `${m.temp}°`, font: { size: 36, weight: 'bold' }, textColor: T, maxLines: 1 },
-          {
-            type: 'stack', direction: 'column', gap: 1,
-            children: [
-              { type: 'text', text: today ? `${today.tempMax}°-${today.tempMin}°` : '', font: { size: 14 }, textColor: S, maxLines: 1 },
-              { type: 'text', text: `${m.city} ${m.weather}`, font: { size: 13 }, textColor: S, maxLines: 1 },
-            ],
-          },
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
-            children: [
-              { type: 'text', text: `AQI ${m.aqi}`, font: { size: 12 }, textColor: S, maxLines: 1 },
-              { type: 'text', text: `湿度${m.humidity}`, font: { size: 12 }, textColor: S, maxLines: 1 },
-            ],
-          },
-        ],
-      },
-      { type: 'stack', direction: 'row', gap: 16, children: [dayCard('明天', tomorrow), dayCard('后天', dayAfter)] },
-      lifeRow,
-      { type: 'spacer' },
-    ],
-  };
+function buildSmall(w, data) {
+  w.setPadding(10, 13, 10, 13)
+  addHeader(w, data)
+  w.addSpacer(4)
+  const hero = w.addStack()
+  hero.layoutHorizontally()
+  hero.centerAlignContent()
+  addText(hero, temp(data.now.temp), {
+    size: 42,
+    weight: 'bold',
+    color: COLORS.ink(),
+    monospaced: true,
+    minScale: 0.65,
+  })
+  hero.addSpacer()
+  addWeatherIcon(hero, data.now.icon, 32, isNight(data))
+  w.addSpacer(2)
+  addText(w, clean(data.now.text) || '实况暂缺', {
+    size: 11,
+    weight: 'medium',
+    color: COLORS.ink(),
+  })
+  w.addSpacer(4)
+  addHighLow(w, data, 10)
+  w.addSpacer(4)
+  addHumidity(w, data, 42)
 }
 
-function renderAccessory(m, family) {
+function buildMedium(w, data) {
+  const warning = clean(data.warnings && data.warnings[0] && data.warnings[0].title)
+  w.setPadding(8, 15, 8, 15)
+  addHeader(w, data)
+  w.addSpacer(2)
+  addHero(w, data, { compact: true })
+  w.addSpacer(3)
+  addMediumDetails(w, data)
+  w.addSpacer(warning ? 3 : 5)
+  addForecast(w, data, true)
+}
+
+function buildLarge(w, data) {
+  const warning = clean(data.warnings && data.warnings[0] && data.warnings[0].title)
+  const wind = [clean(data.now.windDir), clean(data.now.windScale) ? `${clean(data.now.windScale)}级` : '']
+    .filter(Boolean)
+    .join(' ')
+  w.setPadding(12, 16, 12, 16)
+  addHeader(w, data)
+  w.addSpacer(4)
+  addHero(w, data, { large: true })
+  w.addSpacer(4)
+  addHumidity(w, data, 100)
+  w.addSpacer(8)
+  if (addHours(w, data)) w.addSpacer(8)
+
+  const metrics = w.addStack()
+  metrics.layoutHorizontally()
+  addMetric(metrics, 'thermometer.medium', '体感', temp(data.now.feelsLike))
+  metrics.addSpacer()
+  addMetric(metrics, 'wind', '风向 / 风力', wind || unit(data.now.windSpeed, ' km/h'))
+  metrics.addSpacer()
+  addMetric(metrics, 'eye', '能见度', unit(data.now.vis, ' km'))
+
+  w.addSpacer(8)
+  addForecast(w, data, false)
+
+  if (warning) {
+    w.addSpacer(6)
+    const warnBox = w.addStack()
+    warnBox.layoutHorizontally()
+    warnBox.centerAlignContent()
+    warnBox.backgroundColor = COLORS.panel()
+    warnBox.cornerRadius = 8
+    warnBox.setPadding(5, 8, 5, 8)
+    addSymbol(warnBox, 'exclamationmark.triangle.fill', 10, COLORS.amber())
+    warnBox.addSpacer(5)
+    addText(warnBox, `${warning}${data.warnings.length > 1 ? ` · 共${data.warnings.length}条` : ''}`, {
+      size: 10,
+      weight: 'medium',
+      color: COLORS.amber(),
+    })
+  }
+}
+
+function buildAccessory(data, family) {
+  const day = getToday(data)
   if (family === 'accessoryCircular') {
     return {
       type: 'widget',
-      children: [{
-        type: 'text',
-        text: `${m.temp}°\n${m.city}`,
-        font: { size: 14, weight: 'bold' },
-        textAlign: 'center',
-      }],
-    };
+      children: [
+        {
+          type: 'stack',
+          direction: 'column',
+          alignItems: 'center',
+          children: [
+            { type: 'text', text: weatherEmoji(data.now.icon, isNight(data)) || '🌤️', font: { size: 16 } },
+            { type: 'text', text: temp(data.now.temp), font: { size: 12, weight: 'bold' } },
+          ],
+        },
+      ],
+    }
+  }
+  if (family === 'accessoryInline') {
+    return {
+      type: 'widget',
+      children: [
+        {
+          type: 'text',
+          text: `${clean(data.place)} ${weatherEmoji(data.now.icon, isNight(data))} ${temp(data.now.temp)} ${clean(data.now.text)}`,
+        },
+      ],
+    }
   }
   return {
     type: 'widget',
-    children: [{
-      type: 'text',
-      text: `${m.city} ${m.temp}° ${m.weather}`,
-    }],
-  };
+    children: [
+      {
+        type: 'stack',
+        direction: 'column',
+        gap: 2,
+        children: [
+          {
+            type: 'text',
+            text: `${clean(data.place)} · ${clean(data.now.text)} ${temp(data.now.temp)}`,
+            font: { size: 13, weight: 'semibold' },
+            maxLines: 1,
+          },
+          {
+            type: 'text',
+            text: `高 ${temp(day && day.tempMax)}  低 ${temp(day && day.tempMin)}  湿度 ${clean(data.now.humidity) || '—'}%`,
+            font: { size: 11 },
+            maxLines: 1,
+          },
+        ],
+      },
+    ],
+  }
 }
+
+function createWeatherWidget(data, family) {
+  if (String(family || '').startsWith('accessory')) {
+    return buildAccessory(data, family)
+  }
+  const w = createContainer(true)
+  w.layoutVertically()
+  if (family === 'small' || family === 'systemSmall') {
+    buildSmall(w, data)
+  } else if (family === 'large' || family === 'systemLarge' || family === 'extraLarge' || family === 'systemExtraLarge') {
+    buildLarge(w, data)
+  } else {
+    buildMedium(w, data)
+  }
+  return w.toDSL()
+}
+
+function createErrorWidget(errMsg) {
+  const w = createContainer(true)
+  w.layoutVertically()
+  w.setPadding(16, 16, 16, 16)
+  addText(w, '天气·晴雨', { size: 12, weight: 'semibold', color: COLORS.blue() })
+  w.addSpacer(6)
+  addText(w, '天气暂不可用', { size: 18, weight: 'bold', color: COLORS.ink() })
+  w.addSpacer(6)
+  addText(
+    w,
+    clean(errMsg) || '请检查网络连接或模块中的位置参数设置（如 合肥、北京 或 自动）。',
+    { size: 10, color: COLORS.secondary(), lineLimit: 3 }
+  )
+  return w.toDSL()
+}
+
+// ─── Egern 主入口 ───
+export default async function (ctx) {
+  _activeCtx = ctx || {}
+  const family = _activeCtx.widgetFamily || 'systemMedium'
+  try {
+    const data = await getWeather(false)
+    return createWeatherWidget(data, family)
+  } catch (e) {
+    return createErrorWidget(e && (e.message || String(e)))
+  }
+}
+
