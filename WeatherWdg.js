@@ -3863,13 +3863,7 @@ function renderMedium(m) {
                   { type: 'text', text: m.weather, font: { size: 13 }, textColor: T, maxLines: 1 },
                 ],
               },
-              {
-                type: 'stack', direction: 'row', alignItems: 'center',
-                children: [
-                  ...(m.isAuto ? [{ type: 'spacer', length: 23 }] : []),
-                  { type: 'text', text: timeStr, font: { size: 10 }, textColor: S, maxLines: 1 },
-                ],
-              },
+              { type: 'text', text: timeStr, font: { size: 10 }, textColor: S, maxLines: 1 },
             ],
           },
           { type: 'spacer' },
