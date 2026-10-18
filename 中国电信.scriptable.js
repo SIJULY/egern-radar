@@ -2423,13 +2423,22 @@ async function runInAppMenu() {
 
         if (actionIdx === 2) {
           try {
-            const img = await Photo.fromLibrary()
+            const img = await Photos.fromLibrary()
             if (!img) return
             const processed = applyOverlayToImage(img, img.size.width, img.size.height, overlayMode)
             fm.writeImage(getCustomBgFilePath(), processed)
+            ;['small', 'medium', 'large'].forEach(f => {
+              const p = getBgFilePath(f)
+              if (fm.fileExists(p)) fm.remove(p)
+            })
             statusMsg = '已应用自定义背景图'
             renderTable()
-          } catch (_) {}
+            await showAlert('背景已生效', '已成功保存自定义背景图！点击下方预览或返回桌面即可查看效果。')
+          } catch (e) {
+            if (e && String(e.message || e).indexOf('cancel') === -1) {
+              await showAlert('选择图片失败', e.message || String(e))
+            }
+          }
           return
         }
 
@@ -2437,55 +2446,60 @@ async function runInAppMenu() {
           const guide = new Alert()
           guide.title = '如何获取空白桌面截图？'
           guide.message =
-            '1. 长按手机桌面空白处进入「抖动编辑模式」\n2. 向左滑到最右侧的「空白页面」并截图\n3. 点击下方按钮选择刚才的空白桌面截图'
-          guide.addAction('选择空白桌面截图')
+            '1. 长按手机桌面空白处进入「抖动编辑模式」\n2. 向左滑到最右侧的「空白页面」并截图\n3. 点击下方按钮继续选择小组件尺寸、桌面位置与截图'
+          guide.addAction('下一步：选择尺寸与位置')
           guide.addCancelAction('取消')
           if ((await guide.presentAlert()) === -1) return
 
+          const sizeAlert = new Alert()
+          sizeAlert.title = '选择小组件尺寸'
+          sizeAlert.addAction('中号 (Medium · 2×4)')
+          sizeAlert.addAction('小号 (Small · 2×2)')
+          sizeAlert.addAction('大号 (Large · 4×4)')
+          sizeAlert.addCancelAction('取消')
+          const sIdx = await sizeAlert.presentSheet()
+          if (sIdx === -1) return
+          const family = sIdx === 1 ? 'small' : sIdx === 2 ? 'large' : 'medium'
+
+          const posAlert = new Alert()
+          posAlert.title = '选择小组件在桌面的位置'
+          let posKeys = []
+          if (family === 'small') {
+            posAlert.addAction('↖️ 左上 (Top Left)')
+            posAlert.addAction('↗️ 右上 (Top Right)')
+            posAlert.addAction('⬅️ 左中 (Middle Left)')
+            posAlert.addAction('➡️ 右中 (Middle Right)')
+            posAlert.addAction('↙️ 左下 (Bottom Left)')
+            posAlert.addAction('↘️ 右下 (Bottom Right)')
+            posKeys = ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right']
+          } else if (family === 'medium') {
+            posAlert.addAction('⬆️ 顶部 (Top)')
+            posAlert.addAction('⏺️ 中部 (Middle)')
+            posAlert.addAction('⬇️ 底部 (Bottom)')
+            posKeys = ['top', 'middle', 'bottom']
+          } else {
+            posAlert.addAction('⬆️ 顶部大号 (Top)')
+            posAlert.addAction('⬇️ 底部大号 (Bottom)')
+            posKeys = ['top', 'bottom']
+          }
+          posAlert.addCancelAction('取消')
+          const pIdx = await posAlert.presentSheet()
+          if (pIdx === -1) return
+
           try {
-            const wallImg = await Photo.fromLibrary()
+            const wallImg = await Photos.fromLibrary()
             if (!wallImg) return
-
-            const sizeAlert = new Alert()
-            sizeAlert.title = '选择小组件尺寸'
-            sizeAlert.addAction('中号 (Medium · 2×4)')
-            sizeAlert.addAction('小号 (Small · 2×2)')
-            sizeAlert.addAction('大号 (Large · 4×4)')
-            sizeAlert.addCancelAction('取消')
-            const sIdx = await sizeAlert.presentSheet()
-            if (sIdx === -1) return
-            const family = sIdx === 1 ? 'small' : sIdx === 2 ? 'large' : 'medium'
-
-            const posAlert = new Alert()
-            posAlert.title = '选择小组件在桌面的位置'
-            let posKeys = []
-            if (family === 'small') {
-              posAlert.addAction('↖️ 左上 (Top Left)')
-              posAlert.addAction('↗️ 右上 (Top Right)')
-              posAlert.addAction('⬅️ 左中 (Middle Left)')
-              posAlert.addAction('➡️ 右中 (Middle Right)')
-              posAlert.addAction('↙️ 左下 (Bottom Left)')
-              posAlert.addAction('↘️ 右下 (Bottom Right)')
-              posKeys = ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right']
-            } else if (family === 'medium') {
-              posAlert.addAction('⬆️ 顶部 (Top)')
-              posAlert.addAction('⏺️ 中部 (Middle)')
-              posAlert.addAction('⬇️ 底部 (Bottom)')
-              posKeys = ['top', 'middle', 'bottom']
-            } else {
-              posAlert.addAction('⬆️ 顶部大号 (Top)')
-              posAlert.addAction('⬇️ 底部大号 (Bottom)')
-              posKeys = ['top', 'bottom']
-            }
-            posAlert.addCancelAction('取消')
-            const pIdx = await posAlert.presentSheet()
-            if (pIdx === -1) return
 
             const cropped = cropWallpaperForWidget(wallImg, family, posKeys[pIdx], overlayMode)
             fm.writeImage(getBgFilePath(family), cropped)
             statusMsg = `已保存 ${family === 'small' ? '小号' : family === 'large' ? '大号' : '中号'} 透明背景！`
             renderTable()
-          } catch (_) {}
+            await showAlert('透明背景已生效', '已成功裁切并保存透明背景！点击下方预览或返回桌面即可查看效果。')
+          } catch (e) {
+            if (e && String(e.message || e).indexOf('cancel') === -1) {
+              await showAlert('裁切失败', e.message || String(e))
+            }
+          }
         }
       }
     )
