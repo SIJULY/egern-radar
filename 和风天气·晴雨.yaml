@@ -13,13 +13,19 @@ dns: {}
 # 天气/IP 定位接口直连，不走代理（否则 IP 定位到代理出口）
 rules:
   - domain_suffix:
+      match: "weather.com.cn"
+      policy: DIRECT
+  - domain_suffix:
+      match: "bilibili.com"
+      policy: DIRECT
+  - domain_suffix:
+      match: "useragentinfo.com"
+      policy: DIRECT
+  - domain_suffix:
       match: "ipapi.co"
       policy: DIRECT
   - domain_suffix:
       match: "freeipapi.com"
-      policy: DIRECT
-  - domain_suffix:
-      match: "weather.com.cn"
       policy: DIRECT
 scriptings:
 - generic:

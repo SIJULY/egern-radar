@@ -158,11 +158,23 @@ function storageSet(key, val) {
   } catch (e) {}
 }
 
+function cleanEnvCity(v) {
+  const s = String(v || '').trim()
+  if (!s || s.startsWith('{{{')) return ''
+  return s
+}
+
 function settings(ctx) {
   const c = ctx || _activeCtx || {}
   const env = c.env || {}
   const saved = storageGet(NS + 'settings') || {}
-  const loc = String(env.QWEATHER_LOCATION || env.CITY || env.LOCATION || saved.location || DEFAULTS.location).trim() || '自动'
+  const loc =
+    cleanEnvCity(env.QWEATHER_LOCATION) ||
+    cleanEnvCity(env.CITY) ||
+    cleanEnvCity(env.LOCATION) ||
+    cleanEnvCity(saved.location) ||
+    DEFAULTS.location ||
+    '自动'
   return { location: loc }
 }
 
@@ -3545,22 +3557,70 @@ async function httpGetJSON(url, headers = {}, timeoutSec = 6) {
   return JSON.parse(text)
 }
 
+function normalizeCnCityName(raw) {
+  const s = String(raw || '')
+    .trim()
+    .replace(/(市|省|自治区|特别行政区|地区|盟)$/, '')
+    .trim()
+  if (!s || /^(中国|中华|局域网|内网|未知|null|undefined|none)$/i.test(s)) return ''
+  return s
+}
+
 async function getCityByIP() {
+  // 1. 优先使用中国天气网官方原生 IP 定位（同源 weather.com.cn 直连，支持全国省市区且不受海外 IP 库归属地偏差影响）
+  try {
+    const text = await httpGetText(`https://wgeo.weather.com.cn/ip/?_=${Date.now()}`, WC_HEADERS, 4)
+    const mAddr = text.match(/var\s+addr\s*=\s*"([^"]+)"/)
+    if (mAddr && mAddr[1]) {
+      const parts = mAddr[1].split(',').map(s => s.trim()).filter(Boolean)
+      const candidate = normalizeCnCityName(parts[1] || parts[0] || '')
+      if (candidate) {
+        storageSet(NS + 'last-ip-city', { city: candidate, at: new Date().toISOString() })
+        return candidate
+      }
+    }
+  } catch (_) {}
+
+  // 2. 次选哔哩哔哩官方国内高精度 IP 定位（国内 CDN 天然直连，对移动/联通/电信/5G 蜂窝网络定位极准）
+  try {
+    const bili = await httpGetJSON('https://api.live.bilibili.com/ip_service/v1/ip_service/get_ip_addr', {}, 4)
+    const d = (bili && bili.data) || {}
+    const candidate = normalizeCnCityName(d.city || d.province || '')
+    if (candidate) {
+      storageSet(NS + 'last-ip-city', { city: candidate, at: new Date().toISOString() })
+      return candidate
+    }
+  } catch (_) {}
+
+  // 3. 国内备选 IP 定位接口
+  try {
+    const ua = await httpGetJSON('https://ip.useragentinfo.com/json', {}, 4)
+    const candidate = normalizeCnCityName((ua && (ua.city || ua.province)) || '')
+    if (candidate) {
+      storageSet(NS + 'last-ip-city', { city: candidate, at: new Date().toISOString() })
+      return candidate
+    }
+  } catch (_) {}
+
+  // 4. 海外 IP 定位接口兜底
   const apis = [
     { url: 'https://ipapi.co/json/', key: 'city' },
-    { url: 'https://freeipapi.com/api/json', key: 'cityName' },
+    { url: 'https://free.freeipapi.com/api/json', key: 'cityName' },
   ]
   for (const api of apis) {
     try {
       const json = await httpGetJSON(api.url, {}, 5)
-      let raw = String((json && json[api.key]) || '').trim()
+      const raw = String((json && json[api.key]) || '').trim()
       if (raw) {
-        const cn = EN2CN_CITY[raw] || raw.replace(/市$/, '')
-        storageSet(NS + 'last-ip-city', { city: cn, at: new Date().toISOString() })
-        return cn
+        const cn = EN2CN_CITY[raw] || normalizeCnCityName(raw)
+        if (cn) {
+          storageSet(NS + 'last-ip-city', { city: cn, at: new Date().toISOString() })
+          return cn
+        }
       }
     } catch (_) {}
   }
+
   const last = storageGet(NS + 'last-ip-city')
   if (last && last.city && age(last.at) < 86400000 * 3) return last.city
   return '合肥'
