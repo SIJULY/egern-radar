@@ -2150,6 +2150,45 @@ async function loginViaWebView() {
   return ''
 }
 
+async function enrollAndroidIdViaWebView(prefillPhone = '') {
+  const wv = new WebView()
+  await wv.loadURL('https://telecom.nufe.ccwu.cc')
+  if (prefillPhone && /^1\d{10}$/.test(prefillPhone)) {
+    try {
+      await wv.evaluateJavaScript(
+        `(function(){
+          var el = document.querySelector('#phone');
+          if (el && !el.value) { el.value = '${prefillPhone}'; }
+        })();`,
+        false
+      )
+    } catch (_) {}
+  }
+  await wv.present(false)
+  let gotId = ''
+  try {
+    const res = await wv.evaluateJavaScript(
+      `(function(){
+        var el = document.querySelector('#androidId');
+        return el ? (el.textContent || '').trim() : '';
+      })();`,
+      false
+    )
+    if (res && /^[0-9a-fA-F]{16}$/.test(String(res).trim())) {
+      gotId = String(res).trim().toLowerCase()
+    }
+  } catch (_) {}
+  if (!gotId) {
+    try {
+      const clip = String(Pasteboard.paste() || '').trim()
+      if (/^[0-9a-fA-F]{16}$/.test(clip)) {
+        gotId = clip.toLowerCase()
+      }
+    } catch (_) {}
+  }
+  return gotId
+}
+
 async function runInAppMenu() {
   let lastState = null
   let statusMsg = '支持 App 服务密码自动续期登录 & 网页 Cookie 双通道'
@@ -2193,25 +2232,36 @@ async function runInAppMenu() {
         const a = new Alert()
         a.title = '配置电信 App 登录凭证'
         a.message =
-          '填入手机号、6位服务密码及16位十六进制 AndroidID（如 98791a2e229591ab）。三项填齐后将走 App 接口并自动续期重登；留空保存可切回 Cookie 通道。'
+          '填入手机号、6位服务密码及已绑定的16位 AndroidID。\n💡 若首次使用还没有 AndroidID，请先填好手机号与服务密码，再点击「📱 短信验证绑定获取 AndroidID」，绑定后会自动填入保存！'
         a.addTextField('11位电信手机号', s.phone || '')
         a.addSecureTextField('6位服务密码', s.password || '')
-        a.addTextField('16位 AndroidID（纯16进制可随机填16位0-9a-f）', s.androidId || '')
-        a.addAction('保存')
-        a.addAction('🎲 自动生成16位 AndroidID 并保存')
+        a.addTextField('16位 AndroidID（需短信绑定授权后才有效）', s.androidId || '')
+        a.addAction('💾 保存')
+        a.addAction('📱 短信验证绑定获取 AndroidID（首次使用必点）')
         a.addCancelAction('取消')
         const idx = await a.presentAlert()
         if (idx === -1) return
         const phone = a.textFieldValue(0).trim()
         const password = a.textFieldValue(1).trim()
-        let androidId = a.textFieldValue(2).trim()
+        let androidId = a.textFieldValue(2).trim().toLowerCase()
         if (idx === 1) {
-          androidId = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+          const enrolledId = await enrollAndroidIdViaWebView(phone)
+          if (enrolledId) {
+            androidId = enrolledId
+          } else {
+            await showAlert(
+              '未检测到新绑定的 AndroidID',
+              '请在弹出的绑定页面完成「图形验证码 + 短信验证码」并点击「验证并绑定设备」，看到 16 位 androidId 后再点击左上角关闭窗口（或点击一键复制）。'
+            )
+          }
         }
         saveSettings({ phone, password, androidId })
         setStore('app_token', '')
         setStore('app_phone', phone)
-        statusMsg = phone && password && androidId ? 'App 登录凭证已保存，点击「立即刷新」可验证登录' : '已清空/更新 App 凭证'
+        statusMsg =
+          phone && password && androidId
+            ? `App 凭证已保存 (ID: ${androidId.slice(0, 6)}...)，点击「立即刷新」可验证登录`
+            : '已更新 App 凭证（三项填齐后生效）'
         renderTable()
       }
     )
