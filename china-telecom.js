@@ -644,7 +644,7 @@ function pad2(n) {
 
 function fmtTime(ts) {
   const d = new Date(ts);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 /* ---------- 数据层 ---------- */
@@ -961,63 +961,54 @@ async function loadData(ctx) {
   return { configured, ds: cached || null, fromCache: !!cached, cookieDead };
 }
 
-/* ---------- 渲染层（Widget DSL） ---------- */
+/* ---------- 渲染层（Widget DSL）· v23 iOS 液态玻璃仪表盘风格 ---------- */
 
-// 四卡图标：话费¥ / 通用蜂窝 / 定向闪电 / 语音电话
+const C_FEE = '#FF9F0A';
+const C_FLOW = '#0A84FF';
+const C_OTHER = '#64D2FF';
+const C_VOICE = '#30D158';
+const WARN = '#FF453A';
+const TXT = { light: '#000000', dark: '#FFFFFF' };
+const SUB = { light: '#3C3C4399', dark: '#EBEBF599' };
+const GLASS = { light: '#FFFFFFA6', dark: '#FFFFFF1A' };
+
 const FEE_ICON = 'yensign.circle.fill';
-const FEE_ICON_COLOR = '#FF9500';
-const GENERAL_ICON = 'antenna.radiowaves.left.and.right';
-const GENERAL_ICON_COLOR = '#0A84FF';
-const DIRECT_ICON = 'bolt.fill';
-const DIRECT_ICON_COLOR = '#AF52DE';
-const VOICE_ICON = 'phone.circle.fill';
-const VOICE_ICON_COLOR = '#34C759';
+const FEE_ICON_COLOR = C_FEE;
+const GENERAL_ICON = 'wifi';
+const GENERAL_ICON_COLOR = C_FLOW;
+const DIRECT_ICON = 'globe.asia.australia.fill';
+const DIRECT_ICON_COLOR = C_OTHER;
+const VOICE_ICON = 'phone.fill';
+const VOICE_ICON_COLOR = C_VOICE;
 
-// 四卡统一：小图标 / 标题(含单位) / 大数值
-// 卡片统一：小图标 / 标题 / 大数值
-// fourCard=true（4 卡挤）时：标题不带单位，单位跟在数字后面，数字字号自动缩小
-function quadCard(icon, color, data, fourCard) {
-  const titleText = fourCard ? data.title : `${data.title}(${data.unit})`;
-  const numberText = fourCard ? `${data.number}${data.unit}` : String(data.number);
+function bg() {
   return {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    flex: 1,
-    gap: 2,
-    children: [
-      { type: 'image', src: `sf-symbol:${icon}`, width: 32, height: 32, color },
-      { type: 'text', text: titleText, font: { size: 'caption2' }, opacity: 0.75, maxLines: 1, minScale: 0.8 },
-      {
-        type: 'text',
-        text: numberText,
-        font: { size: fourCard ? 'footnote' : 'title2', weight: 'bold' },
-        maxLines: 1,
-        minScale: fourCard ? 0.9 : 0.7,
-      },
+    type: 'linear',
+    colors: [
+      { light: '#EAF3FF', dark: '#0B1A33' },
+      { light: '#F4F0FF', dark: '#120B24' },
+      { light: '#E9FBF3', dark: '#03140F' },
     ],
+    stops: [0, 0.55, 1],
+    startPoint: { x: 0, y: 0 },
+    endPoint: { x: 1, y: 1 },
   };
 }
-// 小尺寸 2x2 紧凑卡
-function miniCard(icon, color, data) {
-  return {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    flex: 1,
-    gap: 1,
-    children: [
-      { type: 'image', src: `sf-symbol:${icon}`, width: 18, height: 18, color },
-      {
-        type: 'text',
-        text: String(data.number),
-        font: { size: 'footnote', weight: 'semibold' },
-        maxLines: 1,
-        minScale: 0.7,
-      },
-      { type: 'text', text: data.title, font: { size: 'caption2' }, opacity: 0.6, maxLines: 1 },
-    ],
-  };
+
+function normPct(p) {
+  const n = Number(p) || 0;
+  return Math.max(0, Math.min(1, n > 1 ? n / 100 : n));
+}
+
+function toMB(d) {
+  const n = parseFloat(d && d.number);
+  if (!Number.isFinite(n)) return null;
+  return d.unit === 'GB' ? n * 1024 : n;
+}
+
+function fmtMB(mb) {
+  if (mb == null || !Number.isFinite(mb)) return '--';
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(0)} MB`;
 }
 
 // 开关2：CT_SHOW_DIRECT=false → 3卡模式（隐藏定向）；=true → 强制4卡；不填 → 有定向数据才显示
@@ -1028,91 +1019,540 @@ function showDirectCard(ctx, ds) {
   return !!ds.hasDirectFlow;
 }
 
+function insights(ctx, ds) {
+  const now = new Date();
+  const dayKey = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysLeft = Math.max(1, dim - now.getDate() + 1);
+  const showUsed = String(ctx?.env?.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true';
+  const showDir = showDirectCard(ctx, ds);
+
+  const _g = toMB(ds.generalFlow);
+  const _o = showDir ? toMB(ds.directFlow) : 0;
+  const flowMB = showUsed ? null : _g == null && !_o ? null : (_g || 0) + (_o || 0);
+
+  let todayMB = null;
+  if (flowMB != null) {
+    let snap = null;
+    try {
+      snap = ctx.storage.getJSON('ct_day_snap');
+    } catch (e) {}
+    if (!snap || snap.date !== dayKey || flowMB > snap.start + 1) {
+      snap = { date: dayKey, start: flowMB };
+      try {
+        ctx.storage.setJSON('ct_day_snap', snap);
+      } catch (e) {}
+    }
+    todayMB = Math.max(0, snap.start - flowMB);
+  }
+
+  const hist = [];
+  if (todayMB != null) {
+    let h = {};
+    try {
+      h = ctx.storage.getJSON('ct_hist') || {};
+    } catch (e) {}
+    h[dayKey] = todayMB;
+    const keep = {};
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86400000);
+      const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      if (h[k] != null) keep[k] = h[k];
+      if (i <= 6) hist.push(h[k] == null ? null : h[k]);
+    }
+    try {
+      ctx.storage.setJSON('ct_hist', keep);
+    } catch (e) {}
+  }
+
+  let forecast = { text: '用量统计中…', color: SUB };
+  if (flowMB != null) {
+    const past = hist.slice(0, 6).filter((v) => v != null && v > 0);
+    const vals = past.length ? past : todayMB > 0 ? [todayMB] : [];
+    if (vals.length) {
+      const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const days = Math.floor(flowMB / avg);
+      forecast =
+        days >= daysLeft
+          ? { text: days > 999 ? '按近期速度 充足' : `预计够用 ${days} 天 ✓`, color: C_VOICE }
+          : { text: `约 ${days} 天用完 · 早于月底`, color: C_FEE };
+    }
+  }
+
+  return {
+    hist,
+    forecast,
+    daysLeft,
+    todayMB,
+    dailyMB: flowMB != null ? flowMB / daysLeft : null,
+    lowFee: (() => {
+      const n = parseFloat(ds.fee && ds.fee.number);
+      return Number.isFinite(n) && n < 10;
+    })(),
+  };
+}
+
+// 半圆仪表 SVG
+function gaugeSvg(pct, color, w) {
+  const stroke = 12,
+    r = (w - stroke) / 2,
+    cx = w / 2,
+    cy = w / 2,
+    h = w / 2 + stroke / 2;
+  const p = normPct(pct);
+  const pt = (a) => [(cx - r * Math.cos(a)).toFixed(2), (cy - r * Math.sin(a)).toFixed(2)];
+  const [x0, y0] = pt(0),
+    [x1, y1] = pt(Math.PI),
+    [xp, yp] = pt(Math.PI * p);
+  let body = `<path d='M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}' fill='none' stroke='${color}' stroke-opacity='0.22' stroke-width='${stroke}' stroke-linecap='round'/>`;
+  if (p > 0.005)
+    body += `<path d='M ${x0} ${y0} A ${r} ${r} 0 0 1 ${xp} ${yp}' fill='none' stroke='${color}' stroke-width='${stroke}' stroke-linecap='round'/>`;
+  return (
+    'data:image/svg+xml,' +
+    encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'>${body}</svg>`)
+  );
+}
+
+// 近 7 天用量柱状图（最后一根是今天）
+function sparkSvg(values, color, w, h) {
+  const vals = values && values.length ? values : [null, null, null, null, null, null, null];
+  const n = vals.length,
+    gap = 3,
+    bw = (w - gap * (n - 1)) / n;
+  const max = Math.max(1, ...vals.map((v) => v || 0));
+  let body = '';
+  vals.forEach((v, i) => {
+    const bh = v ? Math.max(2, (v / max) * h) : 2;
+    const op = v == null ? 0.15 : i === n - 1 ? 1 : 0.55;
+    body += `<rect x='${(i * (bw + gap)).toFixed(1)}' y='${(h - bh).toFixed(1)}' width='${bw.toFixed(1)}' height='${bh.toFixed(1)}' rx='${Math.min(2, bw / 2).toFixed(1)}' fill='${color}' fill-opacity='${op}'/>`;
+  });
+  return (
+    'data:image/svg+xml,' +
+    encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'>${body}</svg>`)
+  );
+}
+
+function t(text, size, weight, color, extra) {
+  return Object.assign(
+    {
+      type: 'text',
+      text: String(text),
+      font: { size, weight: weight || 'regular' },
+      textColor: color || TXT,
+      maxLines: 1,
+      minScale: 0.6,
+    },
+    extra || {}
+  );
+}
+
+function glass(children, extra) {
+  return Object.assign(
+    {
+      type: 'stack',
+      direction: 'column',
+      alignItems: 'start',
+      gap: 6,
+      padding: 12,
+      borderRadius: 22,
+      backgroundColor: GLASS,
+      children,
+    },
+    extra || {}
+  );
+}
+
 function headerRow(title, ds, fromCache, cookieDead) {
-  const t = ds && ds.updatedAt ? fmtTime(ds.updatedAt) : '--:--';
-  // 状态灯：绿=登录有效，红=登录失效，灰=缓存（网络问题，登录态未知）
-  const dotColor = cookieDead ? '#FF3B30' : fromCache ? '#8E8E93' : '#30D158';
-  const srcLabel = ds && ds.source === 'app' ? ' · App' : '';
+  const timeStr = ds && ds.updatedAt ? fmtTime(ds.updatedAt) : '--';
+  const statusStr = cookieDead
+    ? '⚠️ 登录失效，点我重登'
+    : `${fromCache ? '缓存 · ' : ''}更新 ${timeStr}`;
   return {
     type: 'stack',
     direction: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     children: [
-      { type: 'image', src: 'sf-symbol:circle.fill', width: 8, height: 8, color: dotColor },
-      { type: 'text', text: title, font: { size: 'footnote', weight: 'semibold' } },
-      { type: 'spacer' },
       {
-        type: 'text',
-        text: cookieDead ? '⚠️ 登录失效，点我重登' : fromCache ? `缓存 ${t}${srcLabel}` : `更新 ${t}${srcLabel}`,
-        font: { size: 'caption2' },
-        opacity: cookieDead ? 1 : 0.55,
+        type: 'image',
+        src: 'sf-symbol:antenna.radiowaves.left.and.right',
+        width: 12,
+        height: 12,
+        color: C_FLOW,
       },
+      t(title, 'footnote', 'semibold'),
+      { type: 'spacer' },
+      t(statusStr, 10, cookieDead ? 'semibold' : 'regular', cookieDead ? WARN : SUB, { minScale: 1 }),
     ],
   };
 }
 
+function feeCard(ds, ins, size, extra) {
+  const low = ins.lowFee;
+  return glass(
+    [
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 3,
+        children: [
+          {
+            type: 'image',
+            src: 'sf-symbol:yensign.circle.fill',
+            width: 10,
+            height: 10,
+            color: low ? WARN : C_FEE,
+          },
+          t(low ? '话费不足' : '剩余话费', 9, 'medium', low ? WARN : SUB, { minScale: 1 }),
+        ],
+      },
+      { type: 'spacer' },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'end',
+        gap: 1,
+        children: [
+          t('¥', 11, 'semibold', low ? WARN : SUB, { minScale: 1 }),
+          t(ds.fee.number, size || 22, 'bold', low ? WARN : TXT, { minScale: 0.6 }),
+        ],
+      },
+      t(`本月剩 ${ins.daysLeft} 天`, 9, 'medium', SUB, { minScale: 1 }),
+      ...(extra && extra.alignItems === 'center' ? [{ type: 'spacer' }] : []),
+    ],
+    Object.assign({ gap: 2, padding: [7, 9], borderRadius: 16 }, extra || {})
+  );
+}
+
+function gaugeCard(icon, color, d, fallbackTitle, opt) {
+  const o = opt || {};
+  const data = d || { title: fallbackTitle, number: '--', unit: '', percent: 0 };
+  const p = normPct(data.percent);
+  const pct = p > 0 ? Math.round(p * 100) : 0;
+  const gw = o.gw || 46;
+  return glass(
+    [
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 3,
+        children: [
+          { type: 'image', src: `sf-symbol:${icon}`, width: 10, height: 10, color },
+          t(o.title || fallbackTitle || data.title, 9, 'medium', SUB, { minScale: 1 }),
+        ],
+      },
+      {
+        type: 'stack',
+        direction: 'column',
+        alignItems: 'center',
+        gap: -3,
+        children: [
+          {
+            type: 'image',
+            src: gaugeSvg(p, color, 64),
+            width: gw,
+            height: Math.round((gw * 38) / 64),
+          },
+          t(`${pct}%`, 9, 'bold', color, { minScale: 1 }),
+        ],
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'end',
+        gap: 2,
+        children: [
+          t(data.number, o.numSize || 15, 'bold', TXT, { minScale: 0.7 }),
+          t(data.unit || '', 9, 'semibold', SUB, { minScale: 1 }),
+        ],
+      },
+    ],
+    {
+      flex: 1,
+      alignItems: 'center',
+      gap: 2,
+      padding: [7, 4],
+      borderRadius: 16,
+      ...(o.height ? { height: o.height } : {}),
+    }
+  );
+}
+
+function statsStrip(ins, sparkW) {
+  return glass(
+    [
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 6,
+        children: [
+          { type: 'image', src: sparkSvg(ins.hist, C_FLOW, 70, 14), width: sparkW || 46, height: 11 },
+          t(`今日 ${fmtMB(ins.todayMB)}`, 9, 'semibold', TXT, { minScale: 1 }),
+          t(`日均可用 ${fmtMB(ins.dailyMB)}`, 9, 'medium', SUB, { minScale: 1 }),
+          { type: 'spacer' },
+          t(ins.forecast.text, 9, 'semibold', ins.forecast.color, { minScale: 0.8 }),
+        ],
+      },
+    ],
+    { padding: [6, 9], borderRadius: 12, gap: 0 }
+  );
+}
+
+function refresh30() {
+  return new Date(Date.now() + 30 * 60 * 1000).toISOString();
+}
+
 function buildSmall(title, ds, fromCache, ctx, cookieDead) {
-  const cards3 = !showDirectCard(ctx, ds);
-  const row4 = (a, b) => ({
-    type: 'stack',
-    direction: 'row',
-    gap: 6,
-    children: [miniCard(a[0], a[1], a[2]), miniCard(b[0], b[1], b[2])],
-  });
-  const body = cards3
-    ? [
-        {
-          type: 'stack',
-          direction: 'row',
-          gap: 6,
-          children: [miniCard(FEE_ICON, FEE_ICON_COLOR, ds.fee)],
-        },
-        row4([GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow], [VOICE_ICON, VOICE_ICON_COLOR, ds.voice]),
-      ]
-    : [
-        row4([FEE_ICON, FEE_ICON_COLOR, ds.fee], [GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow]),
-        row4([DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow], [VOICE_ICON, VOICE_ICON_COLOR, ds.voice]),
-      ];
+  const ins = insights(ctx, ds);
+  const showDir = showDirectCard(ctx, ds);
+  const showUsed = String(ctx?.env?.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true';
+  const flowPct = normPct(ds.generalFlow && ds.generalFlow.percent);
+  const pctStr = flowPct > 0 ? `${Math.round(flowPct * 100)}%` : '0%';
   return {
     type: 'widget',
     padding: 12,
-    gap: 6,
-    refreshAfter: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
-    children: [headerRow(title, ds, fromCache, cookieDead), ...body],
+    gap: 5,
+    backgroundGradient: bg(),
+    refreshAfter: refresh30(),
+    children: [
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 4,
+        children: [
+          {
+            type: 'image',
+            src: 'sf-symbol:antenna.radiowaves.left.and.right',
+            width: 11,
+            height: 11,
+            color: C_FLOW,
+          },
+          t(title, 'caption1', 'semibold'),
+          { type: 'spacer' },
+          t(`¥${ds.fee.number}`, 11, 'bold', ins.lowFee ? WARN : C_FEE, { minScale: 1 }),
+        ],
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 4,
+        flex: 1,
+        children: [
+          {
+            type: 'stack',
+            direction: 'column',
+            alignItems: 'start',
+            gap: 0,
+            children: [
+              t(showUsed ? '已用流量' : '剩余流量', 9, 'medium', SUB, { minScale: 1 }),
+              {
+                type: 'stack',
+                direction: 'row',
+                alignItems: 'end',
+                gap: 2,
+                children: [
+                  t(ds.generalFlow.number, 22, 'bold', TXT),
+                  t(ds.generalFlow.unit || '', 9, 'semibold', SUB, { minScale: 1 }),
+                ],
+              },
+            ],
+          },
+          { type: 'spacer' },
+          {
+            type: 'stack',
+            direction: 'column',
+            alignItems: 'center',
+            gap: -3,
+            children: [
+              { type: 'image', src: gaugeSvg(flowPct, C_FLOW, 64), width: 42, height: 25 },
+              t(pctStr, 9, 'bold', C_FLOW, { minScale: 1 }),
+            ],
+          },
+        ],
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'end',
+        gap: 5,
+        children: [
+          { type: 'image', src: sparkSvg(ins.hist, C_FLOW, 70, 14), width: 44, height: 11 },
+          t(`今日 ${fmtMB(ins.todayMB)}`, 9, 'semibold', TXT, { minScale: 1 }),
+        ],
+      },
+      t(
+        showDir
+          ? `其他 ${ds.directFlow ? ds.directFlow.number + (ds.directFlow.unit || '') : '--'} · 语音 ${ds.voice.number}${ds.voice.unit || ''}`
+          : `语音 ${ds.voice.number}${ds.voice.unit || ''}`,
+        9,
+        'medium',
+        SUB,
+        { minScale: 0.75 }
+      ),
+      t(`日均可用 ${fmtMB(ins.dailyMB)} · ${ins.forecast.text}`, 9, 'semibold', ins.forecast.color, {
+        minScale: 0.7,
+      }),
+    ],
   };
 }
 
 function buildMedium(title, ds, fromCache, ctx, cookieDead) {
-
-
+  const ins = insights(ctx, ds);
+  const four = showDirectCard(ctx, ds);
+  const showUsed = String(ctx?.env?.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true';
   return {
     type: 'widget',
-    padding: 12,
-    gap: 8,
-    refreshAfter: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    padding: [10, 11],
+    gap: 6,
+    backgroundGradient: bg(),
+    refreshAfter: refresh30(),
     children: [
       headerRow(title, ds, fromCache, cookieDead),
       {
         type: 'stack',
         direction: 'row',
-        gap: 12,
-        children: (() => {
-          const four = showDirectCard(ctx, ds);
-          return [
-            quadCard(FEE_ICON, FEE_ICON_COLOR, ds.fee, four),
-            quadCard(GENERAL_ICON, GENERAL_ICON_COLOR, ds.generalFlow, four),
-            ...(four ? [quadCard(DIRECT_ICON, DIRECT_ICON_COLOR, ds.directFlow, four)] : []),
-            quadCard(VOICE_ICON, VOICE_ICON_COLOR, ds.voice, four),
-          ];
-        })(),
+        alignItems: 'center',
+        gap: 6,
+        flex: 1,
+        children: [
+          feeCard(ds, ins, 21, { width: 84, height: 82, alignItems: 'center' }),
+          gaugeCard('wifi', C_FLOW, ds.generalFlow, showUsed ? '已用流量' : '剩余流量', { height: 82 }),
+          ...(four
+            ? [
+                gaugeCard(
+                  'globe.asia.australia.fill',
+                  C_OTHER,
+                  ds.directFlow,
+                  showUsed ? '已用其他' : '其他流量',
+                  { height: 82 }
+                ),
+              ]
+            : []),
+          gaugeCard('phone.fill', C_VOICE, ds.voice, showUsed ? '已用语音' : '剩余语音', { height: 82 }),
+        ],
       },
+      statsStrip(ins, 40),
     ],
   };
 }
 
-function buildLockScreen(title, ds, family) {
-  if (family === 'accessoryCircular' || family === 'accessoryInline') {
+function buildLarge(title, ds, fromCache, ctx, cookieDead) {
+  const ins = insights(ctx, ds);
+  const showUsed = String(ctx?.env?.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true';
+  const phone = (ctx.env?.CT_APP_PHONE || '').trim();
+  const masked = /^\d{11}$/.test(phone) ? `${phone.slice(0, 3)} **** ${phone.slice(7)}` : '';
+  const labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    labels.push(i === 0 ? '今' : `${d.getDate()}`);
+  }
+  return {
+    type: 'widget',
+    padding: 14,
+    gap: 9,
+    backgroundGradient: bg(),
+    refreshAfter: refresh30(),
+    children: [
+      headerRow(title, ds, fromCache, cookieDead),
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 8,
+        children: [
+          feeCard(ds, ins, 30, { flex: 1, height: 74, padding: [9, 12] }),
+          glass(
+            [
+              t('当前号码', 9, 'medium', SUB, { minScale: 1 }),
+              t(masked || '--', 13, 'semibold', TXT, { family: 'Menlo', minScale: 0.7 }),
+              { type: 'spacer' },
+              t(ins.forecast.text, 10, 'semibold', ins.forecast.color, { minScale: 0.7 }),
+            ],
+            { flex: 1, height: 74, gap: 2, padding: [9, 12], borderRadius: 16 }
+          ),
+        ],
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 8,
+        children: [
+          gaugeCard('wifi', C_FLOW, ds.generalFlow, showUsed ? '已用流量' : '剩余流量', {
+            gw: 62,
+            numSize: 18,
+          }),
+          gaugeCard(
+            'globe.asia.australia.fill',
+            C_OTHER,
+            ds.directFlow,
+            showUsed ? '已用其他' : '其他流量',
+            { gw: 62, numSize: 18 }
+          ),
+          gaugeCard('phone.fill', C_VOICE, ds.voice, showUsed ? '已用语音' : '剩余语音', {
+            gw: 62,
+            numSize: 18,
+          }),
+        ],
+      },
+      glass(
+        [
+          {
+            type: 'stack',
+            direction: 'row',
+            alignItems: 'center',
+            gap: 4,
+            children: [
+              { type: 'image', src: 'sf-symbol:chart.bar.fill', width: 10, height: 10, color: C_FLOW },
+              t('近 7 天流量', 10, 'semibold', TXT, { minScale: 1 }),
+              { type: 'spacer' },
+              t(`今日 ${fmtMB(ins.todayMB)} · 日均可用 ${fmtMB(ins.dailyMB)}`, 9, 'medium', SUB, {
+                minScale: 0.8,
+              }),
+            ],
+          },
+          { type: 'image', src: sparkSvg(ins.hist, C_FLOW, 290, 40), width: 290, height: 40 },
+          {
+            type: 'stack',
+            direction: 'row',
+            alignItems: 'center',
+            gap: 0,
+            children: labels.map((l) => ({
+              type: 'stack',
+              direction: 'row',
+              flex: 1,
+              children: [{ type: 'spacer' }, t(l, 8, 'medium', SUB, { minScale: 1 }), { type: 'spacer' }],
+            })),
+          },
+        ],
+        { gap: 5, padding: [9, 12], borderRadius: 16 }
+      ),
+      { type: 'spacer' },
+    ],
+  };
+}
+
+function buildLockScreen(title, ds, family, ctx) {
+  const ins = insights(ctx, ds);
+  if (family === 'accessoryInline') {
+    return {
+      type: 'widget',
+      children: [
+        {
+          type: 'text',
+          text: `¥${ds.fee.number} · ${ds.generalFlow.number}${ds.generalFlow.unit} · ${ds.voice.number}分`,
+          maxLines: 1,
+          minScale: 0.6,
+        },
+      ],
+    };
+  }
+  if (family === 'accessoryCircular') {
     return {
       type: 'widget',
       children: [
@@ -1125,17 +1565,33 @@ function buildLockScreen(title, ds, family) {
       ],
     };
   }
-  // accessoryRectangular
   return {
     type: 'widget',
-    padding: 8,
-    gap: 4,
+    padding: [2, 4],
+    gap: 2,
     children: [
-      { type: 'text', text: title, font: { size: 'caption2', weight: 'semibold' } },
       {
         type: 'text',
-        text: `¥${ds.fee.number} · ${ds.generalFlow.number}${ds.generalFlow.unit} · ${ds.voice.number}分`,
-        font: { size: 'footnote' },
+        text: `¥${ds.fee.number}${ins.lowFee ? ' · 话费不足' : ''}`,
+        font: { size: 'footnote', weight: 'bold' },
+        maxLines: 1,
+        minScale: 0.6,
+      },
+      {
+        type: 'text',
+        text: `流量 ${ds.generalFlow.number} ${ds.generalFlow.unit} · 语音 ${ds.voice.number}分`,
+        font: { size: 'caption2', weight: 'semibold' },
+        maxLines: 1,
+        minScale: 0.6,
+      },
+      {
+        type: 'text',
+        text:
+          ins.todayMB != null
+            ? `今日 ${fmtMB(ins.todayMB)} · 日均 ${fmtMB(ins.dailyMB)}`
+            : `还剩 ${ins.daysLeft} 天`,
+        font: { size: 'caption2' },
+        opacity: 0.7,
         maxLines: 1,
         minScale: 0.6,
       },
@@ -1148,19 +1604,22 @@ function buildError(title, message, url) {
     type: 'widget',
     padding: 14,
     gap: 6,
+    backgroundGradient: bg(),
     children: [
-      { type: 'text', text: title, font: { size: 'footnote', weight: 'semibold' } },
+      t(title, 'footnote', 'semibold'),
+      { type: 'spacer' },
       {
         type: 'image',
-        src: 'sf-symbol:exclamationmark.triangle',
+        src: 'sf-symbol:exclamationmark.triangle.fill',
         width: 22,
         height: 22,
-        color: '#FF9500',
+        color: C_FEE,
       },
-      { type: 'text', text: message, font: { size: 'caption1' }, opacity: 0.7 },
+      t(message, 'caption1', 'medium', TXT, { maxLines: 4, minScale: 0.7 }),
+      { type: 'spacer' },
     ],
   };
-  if (url) w.url = url; // 点小组件直接跳转（比如跳到登录页）
+  if (url) w.url = url;
   return w;
 }
 
@@ -1233,10 +1692,12 @@ async function handleWidget(ctx) {
 
   const family = ctx.widgetFamily || 'systemSmall';
   let w;
-  if (family === 'systemMedium' || family === 'systemLarge' || family === 'systemExtraLarge') {
+  if (family === 'systemLarge' || family === 'systemExtraLarge') {
+    w = buildLarge(title, ds, fromCache, ctx, cookieDead);
+  } else if (family === 'systemMedium') {
     w = buildMedium(title, ds, fromCache, ctx, cookieDead);
   } else if (family.startsWith('accessory')) {
-    w = buildLockScreen(title, ds, family);
+    w = buildLockScreen(title, ds, family, ctx);
   } else {
     w = buildSmall(title, ds, fromCache, ctx, cookieDead);
   }
