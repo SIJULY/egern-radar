@@ -22,6 +22,7 @@ const URLS = {
   login: 'https://e.dlife.cn/index.do',
   detail: 'https://e.dlife.cn/user/package_detail.do',
   balance: 'https://e.dlife.cn/user/balance.do',
+  enroll: 'https://telecom.nufe.ccwu.cc',
 };
 
 
@@ -853,7 +854,9 @@ function cdtAppDataToDs(apiData, settings) {
 async function tryAppApi(ctx, settings) {
   const phone = (ctx.env.CT_APP_PHONE || '').trim();
   const passwd = ctx.env.CT_APP_PASSWORD || '';
-  const androidId = (ctx.env.CT_APP_ANDROID_ID || '').trim();
+  const androidId =
+    (ctx.env.CT_APP_ANDROID_ID || '').trim() ||
+    (ctx.storage.get('ct_app_android_id') || '').trim();
   // 先试缓存 token
   let token = ctx.storage.get('ct_app_token') || '';
   let apiData = null;
@@ -907,8 +910,14 @@ async function loadData(ctx) {
   const settings = {
     showUsedFlow: String(ctx.env.CT_SHOW_USED_FLOW || '').toLowerCase() === 'true',
   };
-  // 0) App 登录链优先（配了手机号+密码+AndroidID 才走）
-  const appConfigured = !!((ctx.env.CT_APP_PHONE || '').trim() && ctx.env.CT_APP_PASSWORD && (ctx.env.CT_APP_ANDROID_ID || '').trim());
+  // 0) App 登录链优先（配了手机号+密码+AndroidID 才走；AndroidID 支持从模块设置或自动捕获存储读取）
+  const appPhone = (ctx.env.CT_APP_PHONE || '').trim();
+  const appPasswd = ctx.env.CT_APP_PASSWORD || '';
+  const appAndroidId =
+    (ctx.env.CT_APP_ANDROID_ID || '').trim() ||
+    (ctx.storage.get('ct_app_android_id') || '').trim();
+  const appConfigured = !!(appPhone && appPasswd && appAndroidId);
+  const needEnroll = !!(appPhone && appPasswd && !appAndroidId);
   if (appConfigured) {
     try {
       const ds = await tryAppApi(ctx, settings);
@@ -919,7 +928,7 @@ async function loadData(ctx) {
   }
   const storedCookie = ctx.storage.get('ct_cookie') || '';
   // 只要配了登录地址/cookie，或之前抓到过 cookie，就视为"已配置"
-  const configured = !!(envCookie || loginUrl || storedCookie);
+  const configured = !!(envCookie || loginUrl || storedCookie || appConfigured);
 
   // 1) 优先用已捕获的 cookie（从登录后的真实请求里抓的，最可靠）
   const firstCookie = envCookie || storedCookie;
@@ -957,8 +966,8 @@ async function loadData(ctx) {
       /* 解析失败就掉到旧缓存 */
     }
   }
-  const cached = ctx.storage.getJSON('ct_datasource');
-  return { configured, ds: cached || null, fromCache: !!cached, cookieDead };
+  const cached = ctx.storage.getJSON('ct_datasource') || ctx.storage.getJSON('ct_app_datasource');
+  return { configured, ds: cached || null, fromCache: !!cached, cookieDead, needEnroll };
 }
 
 /* ---------- 渲染层（Widget DSL）· v23 iOS 液态玻璃仪表盘风格 ---------- */
@@ -1673,16 +1682,42 @@ async function handleCapture(ctx) {
   }
 }
 
+async function handleResponseCapture(ctx) {
+  const req = ctx.request || {};
+  const url = req.url || '';
+  if (!url.includes('telecom.nufe.ccwu.cc/api/login')) return;
+  try {
+    const data = await ctx.response.json();
+    const aid = String((data && data.androidId) || '').trim().toLowerCase();
+    if (aid && /^[0-9a-f]{16}$/.test(aid)) {
+      ctx.storage.set('ct_app_android_id', aid);
+      ctx.storage.delete('ct_app_token');
+      ctx.notify({
+        title: '中国电信 · 设备绑定成功',
+        body: `已自动捕获保存 AndroidID (${aid})，无需手动填写，小组件将自动更新`,
+        action: { type: 'clipboard', text: aid },
+      });
+    }
+  } catch (_) {}
+}
+
 /* ---------- 小组件（generic 脚本模式） ---------- */
 
 async function handleWidget(ctx) {
   const title = (ctx.env.CT_TITLE || '中国电信').trim() || '中国电信';
-  const { configured, ds, fromCache, cookieDead } = await loadData(ctx);
+  const { configured, ds, fromCache, cookieDead, needEnroll } = await loadData(ctx);
 
   if (!configured) {
+    if (needEnroll) {
+      return buildError(
+        title,
+        '缺少 AndroidID：点击小组件打开绑定页完成短信验证，Egern 将自动保存',
+        URLS.enroll
+      );
+    }
     return buildError(
       title,
-      '未登录：在 Safari 打开 e.dlife.cn 登录一次',
+      '未登录：点击打开 e.dlife.cn 登录，或填手机号+密码后去绑定页获取 AndroidID',
       URLS.login
     );
   }
@@ -1709,6 +1744,10 @@ async function handleWidget(ctx) {
 /* ---------- 入口：单文件双模式 ---------- */
 
 export default async function (ctx) {
+  // response 脚本条目 → 捕获 telecom.nufe.ccwu.cc 短信绑定返回的 androidId
+  if (ctx.response && ctx.request && ctx.request.url) {
+    return handleResponseCapture(ctx);
+  }
   // request 脚本条目 → 捕获登录；generic 脚本条目 → 渲染小组件
   //（ctx.request 仅在 request/response 脚本中可用）
   if (ctx.request && ctx.request.url) {

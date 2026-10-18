@@ -12,7 +12,7 @@ env_schema:
     description: 电信服务密码（非短信验证码）
   CT_APP_ANDROID_ID:
     name: App AndroidID
-    description: 16 位十六进制设备 ID，从 https://telecom.nufe.ccwu.cc 短信登录获取
+    description: 16 位设备 ID（可留空：在 Safari 打开 https://telecom.nufe.ccwu.cc 短信绑定后 Egern 会自动捕获保存，也可手动填写）
   CT_SHOW_DIRECT:
     name: 显示定向流量卡
     description: 关闭后隐藏定向卡片变为三卡；不设置则按是否有定向数据自动判断
@@ -32,11 +32,12 @@ env_schema:
       - "true"
       - "false"
 
-# 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
+# 捕获登录请求与设备绑定需要解密对应域名的 HTTPS 流量（需信任 Egern 证书）
 mitm:
   hostnames:
     includes:
       - e.dlife.cn
+      - telecom.nufe.ccwu.cc
 
 scriptings:
   # 小组件脚本（generic 类型）
@@ -44,6 +45,13 @@ scriptings:
       name: "china-telecom"
       script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
       timeout: 20
+  # 设备绑定 AndroidID 自动捕获（http_response 类型，Safari 完成短信绑定后自动存入本地存储，免手动复制填写）
+  - http_response:
+      name: "中国电信设备绑定捕获"
+      match: '^https://telecom\.nufe\.ccwu\.cc/api/login'
+      script_url: "https://raw.githubusercontent.com/SIJULY/egern-radar/main/china-telecom.js"
+      body_required: true
+      timeout: 10
   # 登录捕获（http_request 类型，与小组件是同一个文件，脚本内部按 ctx.request 自动分支）
   # Safari 里登录 e.dlife.cn 成功后，直接从登录后的真实请求里抓 Cookie 存入存储，
   # 小组件优先用抓到的 Cookie，全程无需手动操作
