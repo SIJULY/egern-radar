@@ -28,6 +28,7 @@ const DEFAULTS = {
   showUsedFlow: false, // true: 显示已用流量/语音, false: 显示剩余
   showDirect: 'auto',  // 'auto': 有定向数据才显示4卡, 'true': 强制4卡, 'false': 强制3卡
   bgTextMode: 'light', // 'light': 纯白高亮字+立体阴影(默认), 'dark': 深色浓黑字, 'auto': 跟随系统
+  refreshMinutes: 30,  // 桌面小组件自动刷新间隔（分钟）
 }
 
 // ─── Keychain 与持久化存储工具 ───
@@ -833,7 +834,7 @@ function toNum(v) {
 function fmtFlow(kb) {
   const n = Math.max(0, toNum(kb))
   const mb = n / 1024
-  if (mb < 1024) return { value: mb >= 100 ? mb.toFixed(0) : mb.toFixed(1), unit: 'MB' }
+  if (mb < 1024) return { value: mb >= 100 ? mb.toFixed(0) : mb.toFixed(2), unit: 'MB' }
   const gb = mb / 1024
   return { value: gb.toFixed(2), unit: 'GB' }
 }
@@ -1534,17 +1535,18 @@ function getMediumInnerWidth() {
 }
 
 function addFeeGlassCard(parent, data, ins, opts = {}) {
-  const width = opts.width || 72
+  const width = opts.width || 86
   const height = opts.height || 82
   const numSize = opts.numSize || 22
   const low = ins.lowFee
+  const hPad = opts.centerAlign !== false ? 2 : 8
 
   const card = parent.addStack()
   card.layoutVertically()
   if (width || height) card.size = new Size(width, height)
   card.backgroundColor = COLORS.cardBg()
   card.cornerRadius = 16
-  card.setPadding(7, 6, 7, 6)
+  card.setPadding(7, hPad, 7, hPad)
 
   const topRow = card.addStack()
   topRow.layoutHorizontally()
@@ -1568,10 +1570,10 @@ function addFeeGlassCard(parent, data, ins, opts = {}) {
   valWrap.bottomAlignContent()
   if (opts.centerAlign !== false) valWrap.addSpacer()
   addText(valWrap, '¥', {
-    size: 12,
+    size: 11.5,
     weight: 'semibold',
     color: low ? COLORS.danger() : COLORS.sub(),
-    minScale: 0.8,
+    minScale: 0.7,
   })
   valWrap.addSpacer(1)
   addText(valWrap, String(data.feeBalance), {
@@ -1579,7 +1581,7 @@ function addFeeGlassCard(parent, data, ins, opts = {}) {
     weight: 'bold',
     rounded: true,
     color: low ? COLORS.danger() : COLORS.primary(),
-    minScale: 0.55,
+    minScale: 0.5,
   })
   valWrap.addSpacer()
 
@@ -1723,13 +1725,16 @@ function buildMedium(w, state) {
 
   const fourCards = m.showDir
   const innerW = getMediumInnerWidth()
-  const count = fourCards ? 4 : 3
-  const cardW = Math.floor((innerW - (count - 1) * 6) / count)
+  // 与 Egern 保持一致：4卡模式下「剩余话费」卡片更宽（约占28%宽度，~88pt），其余3张仪表卡均分剩余宽度
+  const feeW = fourCards ? Math.max(86, Math.round(innerW * 0.278)) : Math.floor((innerW - 12) / 3)
+  const gaugeW = fourCards
+    ? Math.floor((innerW - feeW - 18) / 3)
+    : Math.floor((innerW - feeW - 12) / 2)
 
   addFeeGlassCard(row, data, ins, {
-    width: cardW,
+    width: feeW,
     height: 82,
-    numSize: fourCards ? 21.5 : 24,
+    numSize: fourCards ? 20.5 : 24,
     centerAlign: true,
   })
   row.addSpacer()
@@ -1742,10 +1747,10 @@ function buildMedium(w, state) {
     number: m.flowPrimary.value,
     unit: m.flowPrimary.unit,
     pct: m.flowPct,
-    width: cardW,
+    width: gaugeW,
     height: 82,
     gw: fourCards ? 44 : 50,
-    numSize: fourCards ? 14 : 16,
+    numSize: fourCards ? 15 : 16.5,
   })
 
   if (fourCards) {
@@ -1758,10 +1763,10 @@ function buildMedium(w, state) {
       number: m.dirPrimary.value,
       unit: m.dirPrimary.unit,
       pct: m.dirPct,
-      width: cardW,
+      width: gaugeW,
       height: 82,
       gw: 44,
-      numSize: 14,
+      numSize: 15,
     })
   }
 
@@ -1774,10 +1779,10 @@ function buildMedium(w, state) {
     number: m.voicePrimary,
     unit: '分钟',
     pct: m.voicePct,
-    width: cardW,
+    width: gaugeW,
     height: 82,
     gw: fourCards ? 44 : 50,
-    numSize: fourCards ? 14 : 16,
+    numSize: fourCards ? 15 : 16.5,
   })
 
   w.addSpacer(6)
@@ -2087,7 +2092,8 @@ function createTelecomWidget(state, family = 'medium') {
     return createEmptyWidget(state || { noCreds: true }, family)
   }
   const w = new ListWidget()
-  w.refreshAfterDate = new Date(Date.now() + 30 * 60 * 1000)
+  const mins = Math.max(5, Number(settings().refreshMinutes) || 30)
+  w.refreshAfterDate = new Date(Date.now() + mins * 60 * 1000)
   if (state.expired && state.channel !== 'app') {
     w.url = URLS.login
   }
@@ -2264,18 +2270,20 @@ async function runInAppMenu() {
 
     const dirModeLabel =
       s.showDirect === 'true' ? '强制4卡(含定向)' : s.showDirect === 'false' ? '强制3卡(隐藏定向)' : '自动(有定向才显示)'
+    const refMins = Math.max(5, Number(s.refreshMinutes) || 30)
 
     addOption(
-      '⚙️ 卡片显示偏好与标题设置',
-      `标题：${s.title} · 模式：${s.showUsedFlow ? '显示已用' : '显示剩余'} · 布局：${dirModeLabel}`,
+      '⚙️ 卡片显示偏好与刷新设置',
+      `标题：${s.title} · 模式：${s.showUsedFlow ? '显示已用' : '显示剩余'} · 布局：${dirModeLabel} · 刷新：${refMins}分钟`,
       async () => {
         const m = new Alert()
-        m.title = '卡片显示偏好与标题设置'
+        m.title = '卡片显示偏好与刷新设置'
         m.addAction(`🏷️ 修改小组件标题（当前：${s.title}）`)
         m.addAction(`🔁 切换流量/语音展示（当前：${s.showUsedFlow ? '显示已用' : '显示剩余'}）`)
         m.addAction('📊 定向流量卡片：自动（有定向数据才显示4卡）')
         m.addAction('📊 定向流量卡片：强制 4 卡（始终显示定向）')
         m.addAction('📊 定向流量卡片：强制 3 卡（隐藏定向）')
+        m.addAction(`⏱️ 后台自动刷新间隔（当前：${refMins} 分钟）`)
         m.addCancelAction('取消')
         const idx = await m.presentSheet()
         if (idx === -1) return
@@ -2302,6 +2310,20 @@ async function runInAppMenu() {
           saveSettings({ showDirect: 'false' })
           statusMsg = '定向卡片已设为：强制 3 卡'
           renderTable()
+        } else if (idx === 5) {
+          const rm = new Alert()
+          rm.title = '后台自动刷新间隔'
+          rm.message =
+            '设置桌面小组件的自动刷新时间（refreshAfterDate）。注：iOS 系统会根据亮屏状态与后台刷新权限自动调度执行，无需手动点进脚本。'
+          const opts = [15, 30, 60, 120]
+          opts.forEach(min => rm.addAction(`${min} 分钟${min === refMins ? ' ✓' : ''}`))
+          rm.addCancelAction('取消')
+          const rIdx = await rm.presentSheet()
+          if (rIdx >= 0 && rIdx < opts.length) {
+            saveSettings({ refreshMinutes: opts[rIdx] })
+            statusMsg = `后台自动刷新间隔已设为：每 ${opts[rIdx]} 分钟`
+            renderTable()
+          }
         }
       }
     )
