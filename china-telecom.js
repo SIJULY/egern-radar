@@ -1214,12 +1214,12 @@ function feeCard(ds, ins, size, extra) {
         alignItems: 'end',
         gap: 1,
         children: [
-          t('¥', 11, 'semibold', low ? WARN : SUB, { minScale: 1 }),
-          t(ds.fee.number, size || 22, 'bold', low ? WARN : TXT, { minScale: 0.6 }),
+          t('¥', 12, 'semibold', low ? WARN : SUB, { minScale: 1 }),
+          t(ds.fee.number, size || 24, 'bold', low ? WARN : TXT, { minScale: 0.6 }),
         ],
       },
+      { type: 'spacer' },
       t(`本月剩 ${ins.daysLeft} 天`, 9, 'medium', SUB, { minScale: 1 }),
-      ...(extra && extra.alignItems === 'center' ? [{ type: 'spacer' }] : []),
     ],
     Object.assign({ gap: 2, padding: [7, 9], borderRadius: 16 }, extra || {})
   );
@@ -1420,7 +1420,7 @@ function buildMedium(title, ds, fromCache, ctx, cookieDead) {
         gap: 6,
         flex: 1,
         children: [
-          feeCard(ds, ins, 21, { width: 84, height: 82, alignItems: 'center' }),
+          feeCard(ds, ins, 23, { width: 84, height: 82, alignItems: 'center' }),
           gaugeCard('wifi', C_FLOW, ds.generalFlow, showUsed ? '已用流量' : '剩余流量', { height: 82 }),
           ...(four
             ? [
@@ -1465,7 +1465,7 @@ function buildLarge(title, ds, fromCache, ctx, cookieDead) {
         alignItems: 'center',
         gap: 8,
         children: [
-          feeCard(ds, ins, 30, { flex: 1, height: 74, padding: [9, 12] }),
+          feeCard(ds, ins, 32, { flex: 1, height: 74, padding: [9, 12] }),
           glass(
             [
               t('当前号码', 9, 'medium', SUB, { minScale: 1 }),

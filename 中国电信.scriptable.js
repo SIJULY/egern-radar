@@ -1505,10 +1505,38 @@ function addHeader(w, state, compact = false, rightCustomText = null) {
   }
 }
 
+function drawFeeIcon(colorHex, low = false) {
+  const s = 40
+  const dc = new DrawContext()
+  dc.size = new Size(s, s)
+  dc.opaque = false
+  dc.respectScreenScale = true
+
+  dc.setFillColor(new Color(colorHex, 1))
+  dc.fillEllipse(new Rect(2, 2, s - 4, s - 4))
+
+  dc.setFont(Font.boldRoundedSystemFont(23))
+  dc.setTextColor(Color.white())
+  dc.setTextAlignedCenter()
+  dc.drawTextInRect(low ? '!' : '¥', new Rect(0, 6, s, s - 6))
+  return dc.getImage()
+}
+
+function getMediumInnerWidth() {
+  try {
+    const scr = Device.screenSize()
+    const sw = Math.min(scr.width, scr.height)
+    const widgetW = sw >= 428 ? 364 : sw >= 414 ? 348 : sw >= 390 ? 338 : sw >= 375 ? 329 : 292
+    return widgetW - 22
+  } catch (_) {
+    return 316
+  }
+}
+
 function addFeeGlassCard(parent, data, ins, opts = {}) {
   const width = opts.width || 72
   const height = opts.height || 82
-  const numSize = opts.numSize || 20
+  const numSize = opts.numSize || 22
   const low = ins.lowFee
 
   const card = parent.addStack()
@@ -1522,7 +1550,8 @@ function addFeeGlassCard(parent, data, ins, opts = {}) {
   topRow.layoutHorizontally()
   topRow.centerAlignContent()
   if (opts.centerAlign !== false) topRow.addSpacer()
-  addSymbol(topRow, 'yensign.circle.fill', 10, low ? COLORS.danger() : COLORS.fee())
+  const fImg = topRow.addImage(drawFeeIcon(low ? '#FF453A' : '#FF9F0A', low))
+  fImg.imageSize = new Size(11, 11)
   topRow.addSpacer(3)
   addText(topRow, low ? '话费不足' : '剩余话费', {
     size: 9,
@@ -1539,7 +1568,7 @@ function addFeeGlassCard(parent, data, ins, opts = {}) {
   valWrap.bottomAlignContent()
   if (opts.centerAlign !== false) valWrap.addSpacer()
   addText(valWrap, '¥', {
-    size: 11,
+    size: 12,
     weight: 'semibold',
     color: low ? COLORS.danger() : COLORS.sub(),
     minScale: 0.8,
@@ -1554,7 +1583,7 @@ function addFeeGlassCard(parent, data, ins, opts = {}) {
   })
   valWrap.addSpacer()
 
-  card.addSpacer(2)
+  card.addSpacer()
 
   const botRow = card.addStack()
   botRow.layoutHorizontally()
@@ -1567,7 +1596,6 @@ function addFeeGlassCard(parent, data, ins, opts = {}) {
   })
   botRow.addSpacer()
 
-  if (opts.centerAlign !== false) card.addSpacer(1)
   return card
 }
 
@@ -1694,16 +1722,17 @@ function buildMedium(w, state) {
   row.centerAlignContent()
 
   const fourCards = m.showDir
-  const cardW = fourCards ? 73 : 99
-  const gap = 6
+  const innerW = getMediumInnerWidth()
+  const count = fourCards ? 4 : 3
+  const cardW = Math.floor((innerW - (count - 1) * 6) / count)
 
   addFeeGlassCard(row, data, ins, {
     width: cardW,
     height: 82,
-    numSize: fourCards ? 19.5 : 22,
+    numSize: fourCards ? 21.5 : 24,
     centerAlign: true,
   })
-  row.addSpacer(gap)
+  row.addSpacer()
 
   addGaugeGlassCard(row, {
     icon: 'wifi',
@@ -1720,7 +1749,7 @@ function buildMedium(w, state) {
   })
 
   if (fourCards) {
-    row.addSpacer(gap)
+    row.addSpacer()
     addGaugeGlassCard(row, {
       icon: 'globe.asia.australia.fill',
       colorHex: '#64D2FF',
@@ -1736,7 +1765,7 @@ function buildMedium(w, state) {
     })
   }
 
-  row.addSpacer(gap)
+  row.addSpacer()
   addGaugeGlassCard(row, {
     icon: 'phone.fill',
     colorHex: '#30D158',
@@ -1866,7 +1895,7 @@ function buildLarge(w, state) {
   addFeeGlassCard(topRow, data, ins, {
     width: 146,
     height: 74,
-    numSize: 26,
+    numSize: 28,
     centerAlign: false,
   })
   topRow.addSpacer(8)
