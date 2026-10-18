@@ -1,18 +1,13 @@
 name: 天气·晴雨
-description: 蓝灰 UI 风格 · 含农历节气/逐时预报/五日预报/湿度进度条 · 支持透明自定义背景 · 数据源中国天气网（免 Key）
+description: 蓝灰 UI 风格 · 含农历节气/逐时预报/五日预报/湿度进度条 · 数据源中国天气网（免 Key）
 author: 小龙女她爸
 icon: https://raw.githubusercontent.com/SIJULY/egern-radar/main/weather-icon.png
 compat_arguments:
   weatherCity: ''
-  weatherBg: ''
 compat_arguments_schema:
   weatherCity:
     name: 城市
     description: 要查询的城市，例如 合肥、北京、阳江；留空或填"自动"则按 IP 自动定位（模块自带直连规则）
-    default_value: ''
-  weatherBg:
-    name: 透明/背景图地址
-    description: 可选：填入裁切好的桌面壁纸图片 URL 或 Base64，即可实现桌面透明背景；留空则使用默认蓝灰渐变背景
     default_value: ''
 dns: {}
 # 天气/IP 定位接口直连，不走代理（否则 IP 定位到代理出口）
@@ -33,10 +28,10 @@ scriptings:
     timeout: 15
     env:
       CITY: '{{{weatherCity}}}'
-      BG_IMAGE: '{{{weatherBg}}}'
 widgets:
 - name: 天气·晴雨
   script_name: weathercn
+
 
 
 
