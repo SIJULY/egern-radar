@@ -2205,7 +2205,7 @@ async function runInAppMenu() {
         const phone = a.textFieldValue(0).trim()
         const password = a.textFieldValue(1).trim()
         let androidId = a.textFieldValue(2).trim()
-        if (idx === 1 && !androidId) {
+        if (idx === 1) {
           androidId = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
         }
         saveSettings({ phone, password, androidId })
